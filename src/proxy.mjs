@@ -259,18 +259,19 @@ export async function startProxy() {
         }
       } catch { /* not JSON or not parseable — skip tracking */ }
 
-      // Forward to Anthropic, intercepting the response to extract usage
+      // Forward to Anthropic, intercepting the response to extract usage.
+      // Strip accept-encoding so the upstream returns uncompressed SSE that
+      // the token-capture parser can read. The client still gets the raw bytes
+      // (uncompressed), which Claude Code handles fine.
+      const fwdHeaders = { ...req.headers, host: UPSTREAM, "content-length": out.length };
+      delete fwdHeaders["accept-encoding"];
       const upstream = https.request(
         {
           hostname: UPSTREAM,
           port: 443,
           path: req.url,
           method: req.method,
-          headers: {
-            ...req.headers,
-            host: UPSTREAM,
-            "content-length": out.length,
-          },
+          headers: fwdHeaders,
         },
         (upRes) => {
           // Capture subscription usage caps from every response
