@@ -257,7 +257,10 @@ export async function startProxy() {
         for (const t of TIER_NAMES) {
           if (tierSpec(t)?.id === routedModel) { routedTier = t; break; }
         }
-      } catch { /* not JSON or not parseable — skip tracking */ }
+        log(`tracking: model=${routedModel} tier=${routedTier}`);
+      } catch (e) {
+        log(`tracking: peek failed: ${e.message}`);
+      }
 
       // Forward to Anthropic, intercepting the response to extract usage.
       // Strip accept-encoding so the upstream returns uncompressed SSE that
@@ -276,10 +279,11 @@ export async function startProxy() {
         (upRes) => {
           // Capture subscription usage caps from every response
           captureFromHeaders(upRes.headers);
+          log(`upstream: status=${upRes.statusCode} encoding=${upRes.headers["content-encoding"] ?? "none"} routedModel=${routedModel}`);
           res.writeHead(upRes.statusCode, upRes.headers);
 
           if (!routedModel || upRes.statusCode !== 200) {
-            // Not a routed request or an error — just pipe through
+            log(`skipping token capture: routedModel=${routedModel} status=${upRes.statusCode}`);
             upRes.pipe(res);
             return;
           }
@@ -288,9 +292,12 @@ export async function startProxy() {
           let sseBuffer = "";
           let inputTokens = 0;
           let outputTokens = 0;
+          let chunkCount = 0;
+          let dataLineCount = 0;
 
           upRes.on("data", (chunk) => {
             res.write(chunk);
+            chunkCount++;
 
             // Parse SSE events from the stream to find usage data
             sseBuffer += chunk.toString();
@@ -300,6 +307,7 @@ export async function startProxy() {
 
             for (const line of lines) {
               if (!line.startsWith("data: ")) continue;
+              dataLineCount++;
               const data = line.slice(6).trim();
               if (data === "[DONE]") continue;
               try {
@@ -307,14 +315,17 @@ export async function startProxy() {
                 // Usage appears in message_start (input) and message_delta (output)
                 if (evt.type === "message_start" && evt.message?.usage) {
                   inputTokens = evt.message.usage.input_tokens ?? 0;
+                  log(`captured input_tokens=${inputTokens}`);
                 }
                 if (evt.type === "message_delta" && evt.usage) {
                   outputTokens = evt.usage.output_tokens ?? 0;
+                  log(`captured output_tokens=${outputTokens}`);
                 }
                 // Non-streaming: usage at top level
                 if (evt.usage && evt.type === "message") {
                   inputTokens = evt.usage.input_tokens ?? 0;
                   outputTokens = evt.usage.output_tokens ?? 0;
+                  log(`captured non-stream: in=${inputTokens} out=${outputTokens}`);
                 }
               } catch { /* not JSON — SSE comment or partial */ }
             }
@@ -322,6 +333,7 @@ export async function startProxy() {
 
           upRes.on("end", () => {
             res.end();
+            log(`stream ended: ${chunkCount} chunks, ${dataLineCount} data lines, in=${inputTokens} out=${outputTokens}`);
             if (inputTokens > 0 || outputTokens > 0) {
               const actual = cost(routedModel, inputTokens, outputTokens);
               const baseline = baselineCost(inputTokens, outputTokens);
@@ -334,9 +346,11 @@ export async function startProxy() {
                 baselineCost: baseline,
               });
               log(
-                `usage: ${inputTokens} in / ${outputTokens} out | ` +
+                `recorded: ${inputTokens} in / ${outputTokens} out | ` +
                   `$${actual.toFixed(4)} actual vs $${baseline.toFixed(4)} opus`,
               );
+            } else {
+              log(`no tokens captured — nothing to record`);
             }
           });
         },
