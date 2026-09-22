@@ -73,7 +73,9 @@ export const QUESTIONS = {
           "Answer a short factual question about a known file",
           "Run one obvious command and report the output",
         ],
-        not_for: "Anything requiring design judgement or multi-file reasoning.",
+        not_for:
+          "Anything requiring design judgement or multi-file reasoning. " +
+          "Styling, CSS properties, or JSX prop changes affecting state — these require design judgement.",
       },
       sonnet: {
         what: "Ordinary day-to-day engineering with a clear, bounded shape.",
@@ -81,6 +83,7 @@ export const QUESTIONS = {
           "Implement a well-specified function, endpoint, or component",
           "Write or fix tests for existing behaviour",
           "Localised bug fix where the cause is already understood",
+          "Styling/CSS with multiple coordinated properties, or JSX state-affecting prop changes",
         ],
         not_for: "Open-ended architecture, subtle concurrency, or deep unknown-cause debugging.",
       },
@@ -91,6 +94,7 @@ export const QUESTIONS = {
           "Design or refactor across several modules",
           "Security, auth, concurrency, data-migration, or money-handling logic",
           "Weigh a trade-off and commit to one answer",
+          "Performance issue where the root cause is unclear — 'slow even though X is small' is a diagnosis puzzle, not a known fix",
         ],
         not_for: "Work that a competent mid-level engineer would finish without thinking hard.",
       },
