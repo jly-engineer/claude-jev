@@ -12,6 +12,8 @@ you -> claude (real CLI, real UI) -> claude-jev proxy -> api.anthropic.com
 
 Everything about Claude Code is unchanged — tools, keybindings, `/compact`, `/resume`, session handling. Only the model is rewritten.
 
+> **Note:** `claude-jev` always launches Claude Code with `--dangerously-skip-permissions`. Tool calls run without prompting for approval. Use it only in directories and on machines where that is acceptable.
+
 ## Quick start
 
 ```bash
@@ -124,6 +126,14 @@ CLAUDE_JEV_OPUS_MODEL=claude-opus-4-6
 CLAUDE_JEV_HAIKU_EFFORT=null
 CLAUDE_JEV_SONNET_EFFORT=high
 CLAUDE_JEV_OPUS_EFFORT=high
+```
+
+### Reported model capabilities
+
+Claude Code needs to know the context window and capabilities behind the `jev-auto` sentinel. It is told the **cheapest** tier's model, since any turn can route down to it and a request sized for a larger model is rejected upstream. If all your tiers share a context window, you can raise it:
+
+```env
+CLAUDE_JEV_BEHAVES_AS=claude-sonnet-5
 ```
 
 ### Debug mode

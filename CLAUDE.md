@@ -26,7 +26,9 @@ Proxy flow per request:
 
 - **Fail-open**: Every Jev error/timeout keeps the current model. Never blocks a prompt.
 - **Sentinel model**: `jev-auto` is a fake model ID that Claude Code sends verbatim (it doesn't validate model names behind a custom base URL). The proxy recognizes it as "route this".
-- **behavesAs**: The sentinel is registered via `--settings` with `behavesAs: "claude-sonnet-5"` so Claude Code knows the context window and capabilities.
+- **behavesAs**: The sentinel is registered via `--settings` with `behavesAs` set to the **cheapest** tier's model (`behavesAsModel()` in `src/config.mjs`), so Claude Code knows the context window and capabilities. It must be the cheapest tier, not the middle one — any turn can route down to it, and a request sized for a larger model gets rejected upstream mid-session. Override with `CLAUDE_JEV_BEHAVES_AS` when every tier shares a context window.
+- **Thinking blocks are model-scoped**: A thinking block's signature only verifies on the model that produced it. `stripThinkingHistory()` in `src/proxy.mjs` removes `thinking` / `redacted_thinking` blocks from the history whenever the tier changes, or when the target tier cannot think. It only runs on a fresh user turn — tool-loop continuations keep their pinned tier, so a pending `tool_use` is never separated from its thinking block.
+- **Permissions**: The launcher always appends `--dangerously-skip-permissions`. Intentional — the wrapper is for unattended routing runs.
 - **No accept-encoding**: The proxy strips `accept-encoding` from upstream requests so responses come back as plaintext SSE, which the token capture parser can read.
 - **Dashboard port**: Tries 3579, falls back to random if taken (multiple sessions).
 - **Dashboard URL file**: Written to `~/.claude-jev/dashboard.url` since the startup banner scrolls away when Claude Code takes over the terminal.
@@ -66,6 +68,7 @@ Default starting tier is **haiku**. Jev upgrades when needed.
 | `CLAUDE_JEV_<TIER>_MODEL` | Override a tier's model ID |
 | `CLAUDE_JEV_<TIER>_EFFORT` | Override a tier's effort level |
 | `CLAUDE_JEV_LEDGER_PATH` | Override ledger file location |
+| `CLAUDE_JEV_BEHAVES_AS` | Override the model the sentinel reports as (default: cheapest tier) |
 
 ## Known issues / things to watch
 

@@ -4,7 +4,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { startProxy } from "../src/proxy.mjs";
-import { AUTO_MODEL } from "../src/config.mjs";
+import { AUTO_MODEL, behavesAsModel } from "../src/config.mjs";
 import { startDashboardServer } from "../src/web-server.mjs";
 
 // ── Load .env file ──────────────────────────────────────────────────────────
@@ -111,6 +111,11 @@ if (jevKey) {
   // Write a temp settings file with modelPicker so Claude Code knows the
   // sentinel behavesAs a real model — suppresses the unknown-model warning
   // and gets correct context window / capability handling.
+  //
+  // behavesAsModel() is the cheapest tier, not the middle one: any turn can
+  // route down to it, and a request sized for a larger model is rejected
+  // upstream. Override with CLAUDE_JEV_BEHAVES_AS if every tier shares a
+  // window.
   const settingsFile = join(tmpdir(), "claude-jev", "settings.json");
   try {
     mkdirSync(dirname(settingsFile), { recursive: true });
@@ -121,7 +126,7 @@ if (jevKey) {
             model: AUTO_MODEL,
             label: "Jev Auto",
             description: "Routes each turn to the best model via TypeSafe Jev",
-            behavesAs: "claude-sonnet-5",
+            behavesAs: behavesAsModel(),
           },
         ],
       },

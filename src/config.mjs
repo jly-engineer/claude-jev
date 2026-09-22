@@ -42,6 +42,21 @@ export function tierSpec(tierName) {
   };
 }
 
+/**
+ * The model Claude Code sizes context and capabilities against for the
+ * sentinel (`modelPicker.behavesAs`).
+ *
+ * Any turn can land on any tier, so this has to be the most conservative
+ * tier — the cheapest one. Claiming a larger model here lets Claude Code
+ * build a request the smallest tier cannot accept, which the API rejects
+ * mid-session.
+ *
+ * Read lazily: the env file is loaded after module evaluation.
+ */
+export function behavesAsModel() {
+  return process.env.CLAUDE_JEV_BEHAVES_AS ?? tierSpec(TIER_NAMES[0])?.id ?? TIERS[0].id;
+}
+
 // ── Jev question ────────────────────────────────────────────────────────────
 export const QUESTIONS = {
   model_tier: choice(

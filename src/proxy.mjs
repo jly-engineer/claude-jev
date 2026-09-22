@@ -132,6 +132,46 @@ function extractPrompt(body) {
 }
 
 /**
+ * Drop thinking blocks that a different model left in the history.
+ *
+ * Thinking-block signatures are model-specific: a block signed by sonnet
+ * fails verification on opus, and a non-thinking model rejects them
+ * outright. Only called when the tier for this turn differs from the tier
+ * that produced the history, or when the target cannot think at all.
+ *
+ * Safe at that point because tool-loop continuations keep their pinned tier
+ * (extractPrompt returns null for them), so a pending tool_use is never
+ * separated from its thinking block.
+ */
+export function stripThinkingHistory(body) {
+  const messages = body?.messages;
+  if (!Array.isArray(messages)) return 0;
+
+  let removed = 0;
+  const kept = [];
+  for (const msg of messages) {
+    if (msg?.role !== "assistant" || !Array.isArray(msg.content)) {
+      kept.push(msg);
+      continue;
+    }
+    const content = msg.content.filter(
+      (b) => b?.type !== "thinking" && b?.type !== "redacted_thinking",
+    );
+    if (content.length === msg.content.length) {
+      kept.push(msg);
+      continue;
+    }
+    removed += msg.content.length - content.length;
+    // An assistant turn that was nothing but thinking has no valid form
+    // without it — drop the whole message.
+    if (content.length > 0) kept.push({ ...msg, content });
+  }
+
+  if (removed > 0) body.messages = kept;
+  return removed;
+}
+
+/**
  * Rewrite the request body to use the chosen tier's model and effort.
  * Strips thinking fields when routing to a non-thinking model.
  */
@@ -143,6 +183,8 @@ function applyTier(body, tierName) {
 
   if (!spec.thinking) {
     delete body.thinking;
+    const dropped = stripThinkingHistory(body);
+    if (dropped) log(`stripped ${dropped} thinking block(s) for non-thinking tier ${tierName}`);
     const edits = body.context_management?.edits;
     if (Array.isArray(edits)) {
       body.context_management.edits = edits.filter((e) => !/thinking/i.test(e?.type ?? ""));
@@ -213,7 +255,7 @@ export async function startProxy() {
             let state = convos.get(key);
             if (!state) {
               if (convos.size > 50) convos.delete(convos.keys().next().value);
-              state = { tier: "haiku" };
+              state = { tier: "haiku", lastApplied: null };
               convos.set(key, state);
             }
 
@@ -235,7 +277,19 @@ export async function startProxy() {
               }
             }
 
+            // A tier change invalidates any thinking block already in the
+            // history — it was signed by the previous model. applyTier only
+            // scrubs when the target cannot think, so handle thinking →
+            // thinking switches (sonnet → opus) here.
+            if (state.lastApplied && state.lastApplied !== state.tier) {
+              const dropped = stripThinkingHistory(body);
+              if (dropped) {
+                log(`stripped ${dropped} thinking block(s) on ${state.lastApplied} -> ${state.tier}`);
+              }
+            }
+
             applyTier(body, state.tier);
+            state.lastApplied = state.tier;
           } else {
             // Non-messages endpoint (token counting, etc.) — just swap the sentinel
             // to a real model so the API doesn't reject it.
