@@ -12,10 +12,14 @@ const RETENTION_DAYS = 30;
  * @param {object} event
  * @param {string} event.model    - actual model id used
  * @param {string} event.tier     - tier name (haiku/sonnet/opus)
- * @param {number} event.inputTokens
+ * @param {number} event.inputTokens  - all billed input: uncached + cache write + cache read
  * @param {number} event.outputTokens
+ * @param {number} [event.uncachedInputTokens] - the full-rate slice of inputTokens
+ * @param {number} [event.cacheWriteTokens]    - cache writes (1.25x / 2x input rate)
+ * @param {number} [event.cacheReadTokens]     - cache reads (0.1x input rate)
  * @param {number} event.cost     - actual cost USD
- * @param {number} event.baselineCost - what opus 4.6 would have cost
+ * @param {number} event.baselineCost - what the baseline model would have cost
+ * @param {boolean} [event.estimated] - model had no price entry; costed at baseline rates
  * @param {string} [event.reason] - routing reason
  */
 export function record(event) {

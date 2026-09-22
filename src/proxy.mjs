@@ -6,7 +6,7 @@ import { homedir } from "node:os";
 import { isAuto, AUTO_MODEL, tierSpec, TIER_NAMES } from "./config.mjs";
 import { askJev, decide } from "./router.mjs";
 import { record } from "./ledger.mjs";
-import { cost, baselineCost } from "./pricing.mjs";
+import { cost, baselineCost, totalInputTokens, isPriced } from "./pricing.mjs";
 import { captureFromHeaders } from "./usage-state.mjs";
 
 const UPSTREAM = "api.anthropic.com";
@@ -129,6 +129,52 @@ function extractPrompt(body) {
     return text.replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "").trim() || null;
   }
   return null;
+}
+
+// ── Usage accounting ─────────────────────────────────────────────────────
+
+export const emptyUsage = () => ({
+  inputTokens: 0,
+  outputTokens: 0,
+  cacheWrite5mTokens: 0,
+  cacheWrite1hTokens: 0,
+  cacheReadTokens: 0,
+});
+
+/**
+ * Fold an API `usage` object into the running totals for a response.
+ *
+ * Cache tokens are the bulk of Claude Code's input — reading only
+ * `input_tokens` misses nearly all of it, and misses it unevenly, since a
+ * cache read bills at a tenth of fresh input and a write at more.
+ *
+ * Fields land across several SSE events, so only what a given event actually
+ * reports is applied. Counts are cumulative per response, not deltas: assign
+ * rather than add, or a `message_delta` sequence multiplies the totals.
+ */
+export function mergeUsage(usage, u) {
+  if (!u || typeof u !== "object") return usage;
+
+  if (typeof u.input_tokens === "number") usage.inputTokens = u.input_tokens;
+  if (typeof u.output_tokens === "number") usage.outputTokens = u.output_tokens;
+  if (typeof u.cache_read_input_tokens === "number") {
+    usage.cacheReadTokens = u.cache_read_input_tokens;
+  }
+
+  // Cache writes: prefer the per-TTL breakdown, since 5m and 1h bill at
+  // different multiples. Fall back to the aggregate, which is 5m-priced.
+  const cc = u.cache_creation;
+  const w5 = cc?.ephemeral_5m_input_tokens;
+  const w1 = cc?.ephemeral_1h_input_tokens;
+  if (typeof w5 === "number" || typeof w1 === "number") {
+    usage.cacheWrite5mTokens = w5 ?? 0;
+    usage.cacheWrite1hTokens = w1 ?? 0;
+  } else if (typeof u.cache_creation_input_tokens === "number") {
+    usage.cacheWrite5mTokens = u.cache_creation_input_tokens;
+    usage.cacheWrite1hTokens = 0;
+  }
+
+  return usage;
 }
 
 /**
@@ -356,8 +402,7 @@ export async function startProxy() {
 
           // Intercept SSE chunks to find usage in message_delta / message_stop
           let sseBuffer = "";
-          let inputTokens = 0;
-          let outputTokens = 0;
+          const usage = emptyUsage();
           let chunkCount = 0;
           let dataLineCount = 0;
 
@@ -378,20 +423,19 @@ export async function startProxy() {
               if (data === "[DONE]") continue;
               try {
                 const evt = JSON.parse(data);
-                // Usage appears in message_start (input) and message_delta (output)
+                // Input and cache counts arrive in message_start, output in
+                // message_delta. A non-streaming response carries both at once.
                 if (evt.type === "message_start" && evt.message?.usage) {
-                  inputTokens = evt.message.usage.input_tokens ?? 0;
-                  log(`captured input_tokens=${inputTokens}`);
+                  mergeUsage(usage, evt.message.usage);
+                  log(`captured input usage: ${JSON.stringify(usage)}`);
                 }
                 if (evt.type === "message_delta" && evt.usage) {
-                  outputTokens = evt.usage.output_tokens ?? 0;
-                  log(`captured output_tokens=${outputTokens}`);
+                  mergeUsage(usage, evt.usage);
+                  log(`captured output_tokens=${usage.outputTokens}`);
                 }
-                // Non-streaming: usage at top level
                 if (evt.usage && evt.type === "message") {
-                  inputTokens = evt.usage.input_tokens ?? 0;
-                  outputTokens = evt.usage.output_tokens ?? 0;
-                  log(`captured non-stream: in=${inputTokens} out=${outputTokens}`);
+                  mergeUsage(usage, evt.usage);
+                  log(`captured non-stream: ${JSON.stringify(usage)}`);
                 }
               } catch { /* not JSON — SSE comment or partial */ }
             }
@@ -399,21 +443,35 @@ export async function startProxy() {
 
           upRes.on("end", () => {
             res.end();
-            log(`stream ended: ${chunkCount} chunks, ${dataLineCount} data lines, in=${inputTokens} out=${outputTokens}`);
-            if (inputTokens > 0 || outputTokens > 0) {
-              const actual = cost(routedModel, inputTokens, outputTokens);
-              const baseline = baselineCost(inputTokens, outputTokens);
+            const inTotal = totalInputTokens(usage);
+            log(
+              `stream ended: ${chunkCount} chunks, ${dataLineCount} data lines, ` +
+                `in=${inTotal} (uncached=${usage.inputTokens} write=${usage.cacheWrite5mTokens + usage.cacheWrite1hTokens} ` +
+                `read=${usage.cacheReadTokens}) out=${usage.outputTokens}`,
+            );
+            if (inTotal > 0 || usage.outputTokens > 0) {
+              const actual = cost(routedModel, usage);
+              const baseline = baselineCost(usage);
               record({
                 model: routedModel,
                 tier: routedTier,
-                inputTokens,
-                outputTokens,
+                // inputTokens is every billed input token — uncached, cache
+                // writes and cache reads together. The breakdown that produced
+                // the cost sits alongside it.
+                inputTokens: inTotal,
+                outputTokens: usage.outputTokens,
+                uncachedInputTokens: usage.inputTokens,
+                cacheWriteTokens: usage.cacheWrite5mTokens + usage.cacheWrite1hTokens,
+                cacheReadTokens: usage.cacheReadTokens,
                 cost: actual,
                 baselineCost: baseline,
+                // Model has no price entry — costed at baseline rates, not $0.
+                ...(isPriced(routedModel) ? {} : { estimated: true }),
               });
               log(
-                `recorded: ${inputTokens} in / ${outputTokens} out | ` +
-                  `$${actual.toFixed(4)} actual vs $${baseline.toFixed(4)} opus`,
+                `recorded: ${inTotal} in / ${usage.outputTokens} out | ` +
+                  `$${actual.toFixed(4)} actual vs $${baseline.toFixed(4)} opus` +
+                  (isPriced(routedModel) ? "" : " (estimated — unpriced model)"),
               );
             } else {
               log(`no tokens captured — nothing to record`);

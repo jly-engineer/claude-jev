@@ -29,6 +29,8 @@ Proxy flow per request:
 - **behavesAs**: The sentinel is registered via `--settings` with `behavesAs` set to the **cheapest** tier's model (`behavesAsModel()` in `src/config.mjs`), so Claude Code knows the context window and capabilities. It must be the cheapest tier, not the middle one — any turn can route down to it, and a request sized for a larger model gets rejected upstream mid-session. Override with `CLAUDE_JEV_BEHAVES_AS` when every tier shares a context window.
 - **Thinking blocks are model-scoped**: A thinking block's signature only verifies on the model that produced it. `stripThinkingHistory()` in `src/proxy.mjs` removes `thinking` / `redacted_thinking` blocks from the history whenever the tier changes, or when the target tier cannot think. It only runs on a fresh user turn — tool-loop continuations keep their pinned tier, so a pending `tool_use` is never separated from its thinking block.
 - **Permissions**: The launcher always appends `--dangerously-skip-permissions`. Intentional — the wrapper is for unattended routing runs.
+- **Cache tokens are most of the bill**: Claude Code caches nearly every turn, so `input_tokens` alone is a small fraction of billed input. `mergeUsage()` in `src/proxy.mjs` also captures `cache_creation_input_tokens` (preferring the per-TTL `cache_creation` breakdown) and `cache_read_input_tokens`; `cost()` prices them at 1.25x / 2x / 0.1x the model's input rate. Counts in the SSE stream are cumulative per response, so `mergeUsage` assigns rather than adds. Getting this wrong does not just shrink the numbers — cache reads bill at a tenth, so the actual and baseline sides move by different factors and the savings percentage itself goes wrong.
+- **No silent $0**: An unpriced model id is costed at baseline rates and the event is flagged `estimated: true`. Returning 0 for an unknown model made any `CLAUDE_JEV_*_MODEL` override look free.
 - **No accept-encoding**: The proxy strips `accept-encoding` from upstream requests so responses come back as plaintext SSE, which the token capture parser can read.
 - **Dashboard port**: Tries 3579, falls back to random if taken (multiple sessions).
 - **Dashboard URL file**: Written to `~/.claude-jev/dashboard.url` since the startup banner scrolls away when Claude Code takes over the terminal.
@@ -95,8 +97,10 @@ node -e "
 import { record, reset } from './src/ledger.mjs';
 import { cost, baselineCost } from './src/pricing.mjs';
 reset();
-record({ model: 'claude-haiku-4-5-20251001', tier: 'haiku', inputTokens: 5000, outputTokens: 2000,
-  cost: cost('claude-haiku-4-5-20251001', 5000, 2000), baselineCost: baselineCost(5000, 2000) });
+const usage = { inputTokens: 5000, outputTokens: 2000, cacheWrite5mTokens: 12000, cacheReadTokens: 80000 };
+record({ model: 'claude-haiku-4-5-20251001', tier: 'haiku',
+  inputTokens: 97000, outputTokens: 2000,
+  cost: cost('claude-haiku-4-5-20251001', usage), baselineCost: baselineCost(usage) });
 import { renderDashboard } from './src/dashboard.mjs';
 console.log(renderDashboard());
 "
