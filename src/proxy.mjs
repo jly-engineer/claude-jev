@@ -9,6 +9,7 @@ import { record } from "./ledger.mjs";
 import { cost, baselineCost } from "./pricing.mjs";
 import { captureFromHeaders } from "./usage-state.mjs";
 
+const UPSTREAM = "api.anthropic.com";
 const LOG_FILE = process.env.JEV_DEBUG
   ? join(homedir(), ".claude-jev", "debug.log")
   : null;
