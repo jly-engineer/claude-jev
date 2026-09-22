@@ -1,6 +1,7 @@
 import http from "node:http";
 import https from "node:https";
 import { appendFileSync, mkdirSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { isAuto, AUTO_MODEL, tierSpec, TIER_NAMES } from "./config.mjs";
@@ -270,6 +271,56 @@ function sanitizeSchema(node) {
 }
 
 /**
+ * Identify the conversation a request belongs to.
+ *
+ * Needs to be stable across every turn of one conversation and distinct
+ * between concurrent ones. Claude Code's `metadata.user_id` is the best
+ * signal when present; otherwise the whole first message is hashed —
+ * system reminders, cwd and the opening prompt all land in there.
+ *
+ * The first 80 characters are not enough on their own: that prefix is the
+ * same boilerplate in every session, so every conversation collided onto
+ * one tier state and overwrote each other's routing.
+ *
+ * Residual limitation: two sessions that genuinely open with byte-identical
+ * context still share a key. They then share a tier, which is wrong but not
+ * harmful — the next turn in each re-routes from the shared state.
+ */
+export function conversationKey(body) {
+  const uid = body?.metadata?.user_id;
+  if (typeof uid === "string" && uid) return `uid:${uid}`;
+
+  const first = body?.messages?.[0]?.content;
+  if (first == null) return "anon";
+  const text = typeof first === "string" ? first : JSON.stringify(first);
+  const system = typeof body?.system === "string"
+    ? body.system
+    : JSON.stringify(body?.system ?? "");
+  return "msg:" + createHash("sha1").update(system).update("\u0000").update(text).digest("hex");
+}
+
+/** Conversation states, kept to the most recently used MAX_CONVOS. */
+const MAX_CONVOS = 50;
+
+/**
+ * Fetch a conversation's state, creating it if new, and mark it most
+ * recently used. Map preserves insertion order, so re-inserting on every
+ * touch makes the first key the true LRU victim — evicting by raw insertion
+ * order would drop a long-running session in favour of 50 fresh ones.
+ */
+export function touchConvo(convos, key) {
+  let state = convos.get(key);
+  if (state) {
+    convos.delete(key);
+  } else {
+    state = { tier: "haiku", lastApplied: null };
+  }
+  convos.set(key, state);
+  while (convos.size > MAX_CONVOS) convos.delete(convos.keys().next().value);
+  return state;
+}
+
+/**
  * Start the local proxy. Returns { port, close }.
  */
 export async function startProxy() {
@@ -295,15 +346,7 @@ export async function startProxy() {
         if (isAuto(body.model)) {
           if (isMessagesEndpoint) {
             const prompt = extractPrompt(body);
-            const firstMsg = body.messages?.[0]?.content;
-            const key = typeof firstMsg === "string" ? firstMsg.slice(0, 80) : "default";
-
-            let state = convos.get(key);
-            if (!state) {
-              if (convos.size > 50) convos.delete(convos.keys().next().value);
-              state = { tier: "haiku", lastApplied: null };
-              convos.set(key, state);
-            }
+            const state = touchConvo(convos, conversationKey(body));
 
             if (prompt) {
               const previous = state.tier;
