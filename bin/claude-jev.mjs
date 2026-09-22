@@ -134,6 +134,10 @@ if (jevKey) {
   try {
     const dash = await startDashboardServer(3579);
     dashUrl = dash.url;
+    // Write URL to a known file so the user can always find it
+    const dashFile = join(homedir(), ".claude-jev", "dashboard.url");
+    mkdirSync(dirname(dashFile), { recursive: true });
+    writeFileSync(dashFile, dashUrl + "\n");
     process.on("exit", () => dash.close());
   } catch { /* non-fatal — port may be in use */ }
 
