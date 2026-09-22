@@ -38,7 +38,16 @@ function loadEnvFile() {
 function findClaude() {
   const cmd = process.platform === "win32" ? "where" : "which";
   try {
-    return execSync(`${cmd} claude`, { encoding: "utf8" }).trim().split(/\r?\n/)[0] || null;
+    const lines = execSync(`${cmd} claude`, { encoding: "utf8" }).trim().split(/\r?\n/);
+    if (process.platform === "win32") {
+      // Prefer .exe, then .cmd — the bare extensionless file is a shell script
+      // Node can't spawn without shell: true
+      const exe = lines.find((l) => /\.exe$/i.test(l));
+      if (exe) return exe;
+      const cmdShim = lines.find((l) => /\.cmd$/i.test(l));
+      if (cmdShim) return cmdShim;
+    }
+    return lines[0] || null;
   } catch {
     return null;
   }
