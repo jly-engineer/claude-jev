@@ -1,4 +1,6 @@
-import { appendFileSync, readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import {
+  appendFileSync, readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, rmSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { join, dirname } from "node:path";
 
@@ -37,7 +39,11 @@ export function record(event) {
 
 /**
  * Read all events within a lookback window.
- * Self-prunes events older than RETENTION_DAYS.
+ *
+ * Pure read — it never writes. Pruning used to happen here, which meant the
+ * dashboard's 5-second poll rewrote the whole file underneath the proxy's
+ * appends and could tear or lose events. Pruning is now `prune()`, called
+ * once at startup.
  *
  * @param {number} [days=30]
  * @returns {Array<object>}
@@ -46,28 +52,59 @@ export function readEvents(days = RETENTION_DAYS) {
   if (!existsSync(LEDGER_PATH)) return [];
 
   const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-  const lines = readFileSync(LEDGER_PATH, "utf8").split("\n").filter(Boolean);
   const events = [];
-  const kept = [];
 
-  for (const line of lines) {
+  for (const line of readFileSync(LEDGER_PATH, "utf8").split("\n")) {
+    if (!line) continue;
     try {
       const ev = JSON.parse(line);
-      if (ev.ts >= cutoff) {
-        events.push(ev);
-        kept.push(line);
-      }
-    } catch { /* skip malformed */ }
-  }
-
-  // Compact: drop old events from disk
-  if (kept.length < lines.length) {
-    try {
-      writeFileSync(LEDGER_PATH, kept.join("\n") + (kept.length ? "\n" : ""));
-    } catch { /* non-fatal */ }
+      if (ev.ts >= cutoff) events.push(ev);
+    } catch { /* skip malformed — a torn line from an older build */ }
   }
 
   return events;
+}
+
+/**
+ * Drop events older than RETENTION_DAYS from disk.
+ *
+ * Writes a sibling temp file and renames it over the ledger, so a reader
+ * always sees one whole file or the other rather than a half-rewritten one.
+ *
+ * Call this once at startup, before the proxy begins appending. It is still
+ * unsafe to run against a ledger another process is appending to: an append
+ * that opened the old file before the rename lands in the replaced inode and
+ * is lost. Startup is the one moment this process knows it has no writes of
+ * its own in flight.
+ *
+ * @returns {number} events dropped
+ */
+export function prune() {
+  if (!existsSync(LEDGER_PATH)) return 0;
+
+  const cutoff = Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000;
+  const lines = readFileSync(LEDGER_PATH, "utf8").split("\n").filter(Boolean);
+  const kept = lines.filter((line) => {
+    try {
+      return JSON.parse(line).ts >= cutoff;
+    } catch {
+      return false;
+    }
+  });
+
+  if (kept.length === lines.length) return 0;
+
+  const tmp = `${LEDGER_PATH}.${process.pid}.tmp`;
+  try {
+    mkdirSync(dirname(LEDGER_PATH), { recursive: true });
+    writeFileSync(tmp, kept.join("\n") + (kept.length ? "\n" : ""));
+    renameSync(tmp, LEDGER_PATH);
+  } catch {
+    try { rmSync(tmp, { force: true }); } catch { /* nothing to clean */ }
+    return 0;
+  }
+
+  return lines.length - kept.length;
 }
 
 /**
@@ -79,7 +116,12 @@ export function readEvents(days = RETENTION_DAYS) {
 export function aggregate(events) {
   const now = Date.now();
   const dayMs = 24 * 60 * 60 * 1000;
-  const todayCutoff = now - 1 * dayMs;
+  // "Today" means since local midnight, not the last 24 hours — a rolling
+  // window put yesterday evening's spend under today's label. The 7- and
+  // 30-day buckets stay rolling, which is what "Last 7 days" says.
+  const midnight = new Date();
+  midnight.setHours(0, 0, 0, 0);
+  const todayCutoff = midnight.getTime();
   const weekCutoff = now - 7 * dayMs;
 
   const buckets = {

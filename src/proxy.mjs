@@ -132,7 +132,7 @@ function extractPrompt(body) {
   return null;
 }
 
-// ── Usage accounting ─────────────────────────────────────────────────────
+// ── Usage accounting ────────────────────────────────────────────────────────
 
 export const emptyUsage = () => ({
   inputTokens: 0,

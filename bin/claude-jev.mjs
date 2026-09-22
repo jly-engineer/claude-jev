@@ -104,6 +104,13 @@ if (!claudePath) {
 }
 
 if (jevKey) {
+  // Compact the ledger once, before the proxy starts appending to it.
+  // Readers never prune — that used to rewrite the file under live appends.
+  try {
+    const { prune } = await import("../src/ledger.mjs");
+    prune();
+  } catch { /* non-fatal — a stale ledger costs nothing */ }
+
   const { port, close } = await startProxy();
   env.ANTHROPIC_BASE_URL = `http://127.0.0.1:${port}`;
   if (!env.ANTHROPIC_MODEL) env.ANTHROPIC_MODEL = AUTO_MODEL;
