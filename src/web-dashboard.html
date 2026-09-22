@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>claude-jev · savings dashboard</title>
+<style>
+  :root {
+    --bg: #0C1118;
+    --surface: #151B26;
+    --border: #1E2736;
+    --text: #C9D1D9;
+    --text-dim: #6B7685;
+    --cyan: #00D4FF;
+    --green: #00F0B5;
+    --yellow: #FFD866;
+    --magenta: #D2A8FF;
+    --red: #FF6B6B;
+    --haiku: #00F0B5;
+    --sonnet: #FFD866;
+    --opus: #D2A8FF;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 2rem;
+  }
+  .container { max-width: 960px; margin: 0 auto; }
+
+  /* Header */
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .header h1 {
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: var(--cyan);
+  }
+  .header h1 span { color: var(--text); font-weight: 400; }
+  .header .subtitle { color: var(--text-dim); font-size: 0.8rem; }
+  .live-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--green);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* Summary cards */
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.2rem;
+  }
+  .card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+  .card .value { font-size: 1.8rem; font-weight: 700; margin-top: 0.3rem; }
+  .card .detail { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.3rem; }
+  .card.saved .value { color: var(--green); }
+  .card.actual .value { color: var(--cyan); }
+  .card.baseline .value { color: var(--text-dim); text-decoration: line-through; }
+
+  /* Time windows */
+  .windows { margin-bottom: 2rem; }
+  .windows h2 { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .window-row {
+    display: grid;
+    grid-template-columns: 110px 1fr auto;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .window-label { font-size: 0.85rem; color: var(--text-dim); }
+  .bar-track {
+    height: 28px;
+    background: #1A2233;
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+  }
+  .bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.8s ease;
+    position: relative;
+  }
+  .bar-fill::after {
+    content: attr(data-pct);
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--bg);
+  }
+  .bar-fill.low::after { color: var(--text); right: -40px; }
+  .window-stats { font-size: 0.75rem; color: var(--text-dim); text-align: right; white-space: nowrap; }
+  .window-stats .saved-amt { color: var(--green); font-weight: 600; }
+
+  /* Tier breakdown */
+  .tiers { margin-bottom: 2rem; }
+  .tiers h2 { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .tier-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+  }
+  .tier-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.2rem;
+    border-top: 3px solid var(--border);
+  }
+  .tier-card.haiku  { border-top-color: var(--haiku); }
+  .tier-card.sonnet { border-top-color: var(--sonnet); }
+  .tier-card.opus   { border-top-color: var(--opus); }
+  .tier-name { font-size: 1rem; font-weight: 600; margin-bottom: 0.6rem; }
+  .tier-card.haiku  .tier-name { color: var(--haiku); }
+  .tier-card.sonnet .tier-name { color: var(--sonnet); }
+  .tier-card.opus   .tier-name { color: var(--opus); }
+  .tier-stat { display: flex; justify-content: space-between; font-size: 0.8rem; padding: 0.25rem 0; }
+  .tier-stat .k { color: var(--text-dim); }
+  .tier-stat .v { color: var(--text); }
+  .tier-stat .v.green { color: var(--green); }
+
+  /* Recent activity */
+  .recent { margin-bottom: 2rem; }
+  .recent h2 { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .recent-table { width: 100%; font-size: 0.8rem; border-collapse: collapse; }
+  .recent-table th {
+    text-align: left; color: var(--text-dim); font-weight: 500;
+    padding: 0.5rem 0.8rem; border-bottom: 1px solid var(--border);
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .recent-table td { padding: 0.5rem 0.8rem; border-bottom: 1px solid var(--border); }
+  .tier-badge {
+    display: inline-block; padding: 0.15rem 0.5rem; border-radius: 3px;
+    font-size: 0.7rem; font-weight: 600;
+  }
+  .tier-badge.haiku  { background: rgba(0,240,181,0.15); color: var(--haiku); }
+  .tier-badge.sonnet { background: rgba(255,216,102,0.15); color: var(--sonnet); }
+  .tier-badge.opus   { background: rgba(210,168,255,0.15); color: var(--opus); }
+  .empty-state {
+    text-align: center; padding: 3rem; color: var(--text-dim);
+    background: var(--surface); border-radius: 8px; border: 1px solid var(--border);
+  }
+  .empty-state .icon { font-size: 2rem; margin-bottom: 0.5rem; }
+
+  /* Footer */
+  .footer {
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    display: flex;
+    justify-content: space-between;
+  }
+
+  /* Usage gauges */
+  .usage { margin-bottom: 2rem; }
+  .usage h2 { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .usage-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .gauge-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.4rem;
+  }
+  .gauge-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 0.8rem;
+  }
+  .gauge-title { font-size: 0.9rem; font-weight: 600; }
+  .gauge-pct { font-size: 1.6rem; font-weight: 700; }
+  .gauge-pct.ok { color: var(--green); }
+  .gauge-pct.warn { color: var(--yellow); }
+  .gauge-pct.crit { color: var(--red); }
+  .gauge-track {
+    height: 10px;
+    background: #1A2233;
+    border-radius: 5px;
+    overflow: hidden;
+    margin-bottom: 0.6rem;
+  }
+  .gauge-fill {
+    height: 100%;
+    border-radius: 5px;
+    transition: width 0.8s ease;
+  }
+  .gauge-fill.ok { background: linear-gradient(90deg, #00F0B5, #00D4FF); }
+  .gauge-fill.warn { background: linear-gradient(90deg, #FFD866, #FFA500); }
+  .gauge-fill.crit { background: linear-gradient(90deg, #FF6B6B, #FF3333); }
+  .gauge-meta { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-dim); }
+  .gauge-meta .reset-time { color: var(--cyan); }
+  .usage-note {
+    text-align: center;
+    padding: 1.5rem;
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    grid-column: 1 / -1;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="live-dot"></div>
+    <div>
+      <h1>⚡ claude-jev <span>savings</span></h1>
+      <div class="subtitle">vs always running on Opus 4.6 · auto-refreshes every 5s</div>
+    </div>
+  </div>
+
+  <div class="cards" id="cards"></div>
+  <div class="usage" id="usage"></div>
+  <div class="windows" id="windows"></div>
+  <div class="tiers" id="tiers"></div>
+  <div class="recent" id="recent"></div>
+
+  <div class="footer">
+    <span id="footer-info"></span>
+    <span id="footer-time"></span>
+  </div>
+</div>
+
+<script>
+function fmt$(n) {
+  return n < 0.01 && n > 0 ? `$${n.toFixed(4)}` : `$${n.toFixed(2)}`;
+}
+function fmtTokens(n) {
+  if (n >= 1e6) return `${(n/1e6).toFixed(1)}M`;
+  if (n >= 1e3) return `${(n/1e3).toFixed(1)}k`;
+  return String(n);
+}
+function fmtPct(part, whole) {
+  if (whole === 0) return '0%';
+  return `${((part/whole)*100).toFixed(1)}%`;
+}
+function fmtTime(ts) {
+  const d = new Date(ts);
+  const now = new Date();
+  const diff = now - d;
+  if (diff < 60000) return 'just now';
+  if (diff < 3600000) return `${Math.floor(diff/60000)}m ago`;
+  if (diff < 86400000) return `${Math.floor(diff/3600000)}h ago`;
+  return d.toLocaleDateString();
+}
+
+function renderCards(month) {
+  const saved = month.baselineCost - month.cost;
+  return `
+    <div class="card saved">
+      <div class="label">You saved</div>
+      <div class="value">${fmt$(saved)}</div>
+      <div class="detail">${fmtPct(saved, month.baselineCost)} less than Opus 4.6</div>
+    </div>
+    <div class="card actual">
+      <div class="label">Actual spend</div>
+      <div class="value">${fmt$(month.cost)}</div>
+      <div class="detail">${fmtTokens(month.inputTokens + month.outputTokens)} tokens · ${month.requests} reqs</div>
+    </div>
+    <div class="card baseline">
+      <div class="label">Opus 4.6 would be</div>
+      <div class="value">${fmt$(month.baselineCost)}</div>
+      <div class="detail">${fmtTokens(month.inputTokens)} in / ${fmtTokens(month.outputTokens)} out</div>
+    </div>
+  `;
+}
+
+function renderWindow(label, bucket) {
+  const saved = bucket.baselineCost - bucket.cost;
+  const pct = bucket.baselineCost > 0 ? (saved / bucket.baselineCost) * 100 : 0;
+  const width = Math.max(0, Math.min(100, pct));
+  const low = width < 15;
+  const gradient = width > 50
+    ? 'linear-gradient(90deg, #00F0B5, #00D4FF)'
+    : 'linear-gradient(90deg, #00F0B5, #00F0B5)';
+  return `
+    <div class="window-row">
+      <div class="window-label">${label}</div>
+      <div class="bar-track">
+        <div class="bar-fill ${low ? 'low' : ''}" style="width:${width}%;background:${gradient}" data-pct="${pct.toFixed(1)}%"></div>
+      </div>
+      <div class="window-stats">
+        <span class="saved-amt">${fmt$(saved)}</span> · ${fmtTokens(bucket.inputTokens + bucket.outputTokens)} · ${bucket.requests} reqs
+      </div>
+    </div>
+  `;
+}
+
+function renderTiers(byTier) {
+  const order = ['haiku', 'sonnet', 'opus'];
+  let html = '<h2>Routing breakdown</h2><div class="tier-grid">';
+  for (const tier of order) {
+    const b = byTier[tier] || { requests: 0, inputTokens: 0, outputTokens: 0, cost: 0, baselineCost: 0 };
+    const saved = b.baselineCost - b.cost;
+    const tokens = b.inputTokens + b.outputTokens;
+    const pctReqs = byTier._totalReqs > 0 ? ((b.requests / byTier._totalReqs) * 100).toFixed(0) : 0;
+    html += `
+      <div class="tier-card ${tier}">
+        <div class="tier-name">${tier}</div>
+        <div class="tier-stat"><span class="k">Requests</span><span class="v">${b.requests} (${pctReqs}%)</span></div>
+        <div class="tier-stat"><span class="k">Tokens</span><span class="v">${fmtTokens(tokens)}</span></div>
+        <div class="tier-stat"><span class="k">Actual cost</span><span class="v">${fmt$(b.cost)}</span></div>
+        <div class="tier-stat"><span class="k">Saved</span><span class="v green">${fmt$(saved)}</span></div>
+      </div>
+    `;
+  }
+  html += '</div>';
+  return html;
+}
+
+function renderRecent(events) {
+  if (!events.length) {
+    return `
+      <div class="empty-state">
+        <div class="icon">⚡</div>
+        <div>No usage data yet. Start a session with <strong>claude-jev</strong></div>
+      </div>
+    `;
+  }
+  const recent = events.slice(-15).reverse();
+  let html = '<h2>Recent requests</h2><table class="recent-table"><thead><tr>';
+  html += '<th>When</th><th>Tier</th><th>Tokens</th><th>Actual</th><th>Opus cost</th><th>Saved</th>';
+  html += '</tr></thead><tbody>';
+  for (const ev of recent) {
+    const saved = (ev.baselineCost || 0) - (ev.cost || 0);
+    const tokens = (ev.inputTokens || 0) + (ev.outputTokens || 0);
+    html += `<tr>
+      <td>${fmtTime(ev.ts)}</td>
+      <td><span class="tier-badge ${ev.tier || ''}">${ev.tier || '?'}</span></td>
+      <td>${fmtTokens(tokens)}</td>
+      <td>${fmt$(ev.cost || 0)}</td>
+      <td style="color:var(--text-dim)">${fmt$(ev.baselineCost || 0)}</td>
+      <td style="color:var(--green)">${fmt$(saved)}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  return html;
+}
+
+function renderUsage(usage) {
+  if (!usage || (usage.fiveHour.utilization === null && usage.sevenDay.utilization === null)) {
+    return `
+      <h2>Claude usage</h2>
+      <div class="usage-grid">
+        <div class="usage-note">
+          ⏳ Waiting for first API response to capture usage caps...<br>
+          <small>Usage data appears after your first prompt in a claude-jev session.</small>
+        </div>
+      </div>
+    `;
+  }
+
+  function gauge(title, utilization, resetAt, windowLabel) {
+    const pct = Math.min(100, (utilization ?? 0) * 100);
+    const level = pct >= 90 ? 'crit' : pct >= 70 ? 'warn' : 'ok';
+    const remaining = pct >= 100 ? 0 : (100 - pct);
+
+    let resetStr = '';
+    if (resetAt) {
+      const resetDate = new Date(resetAt * 1000);
+      const now = new Date();
+      const diffMs = resetDate - now;
+      if (diffMs > 0) {
+        const hrs = Math.floor(diffMs / 3600000);
+        const mins = Math.floor((diffMs % 3600000) / 60000);
+        if (hrs > 24) {
+          const days = Math.floor(hrs / 24);
+          const remHrs = hrs % 24;
+          resetStr = days + 'd ' + remHrs + 'h';
+        } else if (hrs > 0) {
+          resetStr = hrs + 'h ' + mins + 'm';
+        } else {
+          resetStr = mins + 'm';
+        }
+      } else {
+        resetStr = 'resetting...';
+      }
+    }
+
+    return '<div class="gauge-card">'
+      + '<div class="gauge-header">'
+      + '<div class="gauge-title">' + title + '</div>'
+      + '<div class="gauge-pct ' + level + '">' + pct.toFixed(1) + '%</div>'
+      + '</div>'
+      + '<div class="gauge-track">'
+      + '<div class="gauge-fill ' + level + '" style="width:' + pct + '%"></div>'
+      + '</div>'
+      + '<div class="gauge-meta">'
+      + '<span>' + remaining.toFixed(1) + '% remaining</span>'
+      + (resetStr ? '<span class="reset-time">Resets in ' + resetStr + '</span>' : '')
+      + '</div>'
+      + '</div>';
+  }
+
+  let html = '<h2>Claude usage</h2><div class="usage-grid">';
+  html += gauge('Session (5-hour window)', usage.fiveHour.utilization, usage.fiveHour.resetAt, '5h');
+  html += gauge('Weekly cap', usage.sevenDay.utilization, usage.sevenDay.resetAt, '7d');
+  html += '</div>';
+  return html;
+}
+
+async function refresh() {
+  try {
+    const res = await fetch('/api/savings');
+    const data = await res.json();
+    const { today, week, month, byTier } = data.aggregated;
+    byTier._totalReqs = month.requests;
+
+    document.getElementById('cards').innerHTML = renderCards(month);
+    document.getElementById('usage').innerHTML = renderUsage(data.usage);
+
+    document.getElementById('windows').innerHTML =
+      '<h2>Savings over time</h2>' +
+      renderWindow('Today', today) +
+      renderWindow('Last 7 days', week) +
+      renderWindow('Last 30 days', month);
+
+    document.getElementById('tiers').innerHTML = renderTiers(byTier);
+    document.getElementById('recent').innerHTML = renderRecent(data.events);
+    document.getElementById('footer-info').textContent = `${data.events.length} events in ledger`;
+    document.getElementById('footer-time').textContent = `Updated ${new Date().toLocaleTimeString()}`;
+  } catch (e) {
+    console.error('Refresh failed:', e);
+  }
+}
+
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>

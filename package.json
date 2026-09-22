@@ -1,0 +1,16 @@
+{
+  "name": "claude-jev",
+  "version": "1.0.0",
+  "description": "Claude Code wrapper that uses TypeSafe Jev to auto-route prompts to the best model",
+  "type": "module",
+  "bin": {
+    "claude-jev": "./bin/claude-jev.mjs"
+  },
+  "dependencies": {
+    "@typesafe-ai/sdk": "^0.6.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}
