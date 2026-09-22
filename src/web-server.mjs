@@ -32,7 +32,19 @@ export async function startDashboardServer(preferredPort = 0) {
     res.end(html);
   });
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    server.on("error", (err) => {
+      if (err.code === "EADDRINUSE" && preferredPort !== 0) {
+        // Preferred port taken (another session) — fall back to random
+        server.listen(0, "127.0.0.1", () => {
+          const { port } = server.address();
+          const url = `http://127.0.0.1:${port}`;
+          resolve({ port, url, close: () => server.close() });
+        });
+      } else {
+        reject(err);
+      }
+    });
     server.listen(preferredPort, "127.0.0.1", () => {
       const { port } = server.address();
       const url = `http://127.0.0.1:${port}`;
