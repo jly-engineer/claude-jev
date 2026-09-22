@@ -1,0 +1,164 @@
+# claude-jev
+
+A wrapper for [Claude Code](https://code.claude.com) that uses [TypeSafe Jev](https://docs.typesafe.ai) to automatically route each prompt to the cheapest model that can handle it.
+
+A typo fix goes to Haiku. A standard implementation goes to Sonnet. A hard debugging session goes to Opus. You don't pick — Jev decides in ~200ms for a fraction of a cent, and the proxy rewrites the model field before it reaches the API.
+
+```
+you -> claude (real CLI, real UI) -> claude-jev proxy -> api.anthropic.com
+                                          |
+                                          +-> Jev: which tier fits this prompt?
+```
+
+Everything about Claude Code is unchanged — tools, keybindings, `/compact`, `/resume`, session handling. Only the model is rewritten.
+
+## Quick start
+
+```bash
+git clone https://github.com/jly-engineer/claude-jev.git
+cd claude-jev
+npm install
+npm link
+
+# Set your Jev key (free from https://console.typesafe.ai/keys)
+echo "JEV_API_KEY=sk-..." > ~/.claude-jev.env
+
+# Launch
+claude-jev
+```
+
+## How it works
+
+`claude-jev` starts a local HTTP proxy on a random loopback port and launches Claude Code with `ANTHROPIC_BASE_URL` pointing at it. Every user turn is sent to Jev for classification (~70-500ms, $0.042/MTok input, output free). The proxy rewrites the `model` field and forwards the request upstream.
+
+### Routing tiers
+
+| Tier | Model | When |
+|------|-------|------|
+| **haiku** | `claude-haiku-4-5-20251001` | Typo fixes, renames, factual lookups, mechanical edits |
+| **sonnet** | `claude-sonnet-5` | Standard implementations, test writing, known bug fixes |
+| **opus** | `claude-opus-4-6` | Unknown-cause debugging, multi-module design, security logic |
+
+### Fail-open design
+
+Every error path keeps the current model:
+
+- Jev unreachable or times out -> keep current tier
+- Low confidence (<0.6) -> never downgrade, cap upgrades at sonnet
+- Non-routed requests (user picked a model, tool continuations) -> pass through untouched
+
+### Model switch animation
+
+When Jev switches tiers, you see an animated transition in the terminal:
+
+```
+  ◐ haiku
+  ◑ ━━━╸┄┄┄┄ opus
+  ⚡ haiku -> opus (claude-opus-4-6) p=0.92
+```
+
+Color-coded: haiku = green, sonnet = yellow, opus = magenta.
+
+## Savings dashboard
+
+Track what you're saving compared to running everything on Opus 4.6.
+
+### Terminal
+
+```bash
+claude-jev savings              # headroom-style terminal dashboard
+claude-jev savings --json       # machine-readable output
+claude-jev savings --days 7     # restrict lookback window (1-30)
+claude-jev savings --reset      # clear the ledger
+```
+
+```
+  ⚡ claude-jev savings  vs always using Opus 4.6
+  ─────────────────────────────────────────────────────────────────
+
+  Today          ██████████████░░░░░░ 69.2% saved  66.0k tokens  $1.51 saved  (5 reqs)
+  Last 7 days    ██████████████░░░░░░ 69.2% saved  66.0k tokens  $1.51 saved  (5 reqs)
+  Last 30 days   ██████████████░░░░░░ 69.2% saved  66.0k tokens  $1.51 saved  (5 reqs)
+
+  Cost breakdown by tier:
+
+  haiku       3 reqs    39.0k tokens     $1.18 saved  (actual: $0.07)
+  sonnet      1 reqs    12.0k tokens     $0.34 saved  (actual: $0.08)
+  opus        1 reqs    15.0k tokens     $0.00 saved  (actual: $0.53)
+```
+
+### Web dashboard
+
+A live web dashboard runs automatically alongside every `claude-jev` session at **http://127.0.0.1:3579**. Or launch it standalone:
+
+```bash
+claude-jev dashboard    # opens browser to http://127.0.0.1:3579
+```
+
+Features:
+- **Summary cards** — You Saved / Actual Spend / Opus 4.6 Would Be
+- **Claude usage gauges** — 5-hour session cap and weekly cap with reset countdowns
+- **Savings over time** — progress bars for today / 7 days / 30 days
+- **Routing breakdown** — per-tier request counts, tokens, costs, and savings
+- **Recent requests** — last 15 requests with tier badges and per-request savings
+- **Auto-refreshes every 5 seconds**
+
+## Configuration
+
+### Environment file
+
+`claude-jev` reads `~/.claude-jev.env` on startup:
+
+```env
+JEV_API_KEY=sk-your-key-here
+```
+
+`TYPESAFE_API_KEY` also works. Without a key, `claude-jev` launches plain Claude Code with no routing.
+
+### Override tier models
+
+```env
+CLAUDE_JEV_HAIKU_MODEL=claude-haiku-4-5-20251001
+CLAUDE_JEV_SONNET_MODEL=claude-sonnet-5
+CLAUDE_JEV_OPUS_MODEL=claude-opus-4-6
+CLAUDE_JEV_HAIKU_EFFORT=null
+CLAUDE_JEV_SONNET_EFFORT=high
+CLAUDE_JEV_OPUS_EFFORT=high
+```
+
+### Debug mode
+
+```bash
+JEV_DEBUG=1 claude-jev
+```
+
+Logs every routing decision, Jev response time, confidence, and token usage to stderr.
+
+## How credentials are handled
+
+Your Anthropic credentials are never read, stored, or logged. The proxy forwards the `authorization` header verbatim. The only data sent to Jev is the text of the user's latest turn for classification. The proxy listens on `127.0.0.1` only.
+
+## Project structure
+
+```
+bin/claude-jev.mjs      CLI launcher, env loading, subcommands
+src/config.mjs          Tier table, Jev question, policy thresholds
+src/router.mjs          Jev SDK integration + decide() policy
+src/proxy.mjs           HTTP proxy, model rewrite, SSE token capture
+src/pricing.mjs         Per-model token pricing
+src/ledger.mjs          Append-only JSONL usage ledger
+src/dashboard.mjs       Terminal savings renderer
+src/usage-state.mjs     In-memory Claude usage cap state
+src/web-server.mjs      Dashboard HTTP server
+src/web-dashboard.html  Web dashboard UI
+```
+
+## Requirements
+
+- Node.js 20+
+- [Claude Code](https://code.claude.com/docs/en/setup) installed
+- A [TypeSafe Jev API key](https://console.typesafe.ai/keys) (free)
+
+## License
+
+MIT
