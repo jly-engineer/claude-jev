@@ -1,15 +1,26 @@
 import http from "node:http";
 import https from "node:https";
+import { appendFileSync, mkdirSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { homedir } from "node:os";
 import { isAuto, AUTO_MODEL, tierSpec, TIER_NAMES } from "./config.mjs";
 import { askJev, decide } from "./router.mjs";
 import { record } from "./ledger.mjs";
 import { cost, baselineCost } from "./pricing.mjs";
 import { captureFromHeaders } from "./usage-state.mjs";
 
-const UPSTREAM = "api.anthropic.com";
+const LOG_FILE = process.env.JEV_DEBUG
+  ? join(homedir(), ".claude-jev", "debug.log")
+  : null;
 
 function log(msg) {
-  if (process.env.JEV_DEBUG) process.stderr.write(`[claude-jev] ${msg}\n`);
+  if (!LOG_FILE) return;
+  try {
+    mkdirSync(dirname(LOG_FILE), { recursive: true });
+    appendFileSync(LOG_FILE, `[${new Date().toISOString()}] ${msg}\n`);
+  } catch {
+    process.stderr.write(`[claude-jev] ${msg}\n`);
+  }
 }
 
 // ── Tier colors ─────────────────────────────────────────────────────────────
