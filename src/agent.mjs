@@ -37,6 +37,11 @@ export function agentConfig() {
     deny: deny.trim(),
     writable: deny.trim() === "",
     cwd: process.env.CLAUDE_JEV_AGENT_CWD || process.cwd(),
+    // acceptEdits only auto-approves edits inside the working directory.
+    // Anywhere else the tool stalls waiting for a permission the browser
+    // cannot grant, so extra roots have to be declared up front. Separated by
+    // ";" because Windows paths contain spaces and drive colons.
+    dirs: (process.env.CLAUDE_JEV_AGENT_DIRS || "").split(";").map((d) => d.trim()).filter(Boolean),
     permissionMode: process.env.CLAUDE_JEV_AGENT_PERMISSION || "acceptEdits",
   };
 }
@@ -68,7 +73,7 @@ export const newAgentSession = () => randomUUID();
  * asserted without spawning anything.
  */
 export function buildArgs({ prompt, sessionId, started, settingsFile }) {
-  const { tools, deny, permissionMode } = agentConfig();
+  const { tools, deny, dirs, permissionMode } = agentConfig();
   return [
     "-p", prompt,
     "--output-format", "stream-json",
@@ -79,6 +84,7 @@ export function buildArgs({ prompt, sessionId, started, settingsFile }) {
     ...(tools ? ["--allowed-tools", ...tools.split(/\s+/)] : []),
     // The actual boundary. See the note at the top of this file.
     ...(deny ? ["--disallowed-tools", ...deny.split(/\s+/)] : []),
+    ...(dirs.length ? ["--add-dir", ...dirs] : []),
     ...(settingsFile ? ["--settings", settingsFile] : []),
   ];
 }
@@ -163,8 +169,15 @@ export function runAgentTurn({ prompt, sessionId, started, proxyPort, settingsFi
         for (const block of evt.message.content) {
           if (block?.type !== "tool_result" || !block.is_error) continue;
           const body = typeof block.content === "string" ? block.content : JSON.stringify(block.content ?? "");
-          const m = /No such tool available: (\w+)|(\w+) is disabled for this session/.exec(body);
-          if (m) onEvent({ kind: "denied", name: m[1] || m[2] });
+          const off = /No such tool available: (\w+)|(\w+) is disabled for this session/.exec(body);
+          if (off) { onEvent({ kind: "denied", reason: "disabled", name: off[1] || off[2] }); continue; }
+
+          // "Claude requested permissions to write to <path>, but you haven't
+          // granted it yet." The tool is allowed; the path is out of scope.
+          // Headless has no approval channel, so this would otherwise stall
+          // with the agent claiming it is waiting on the user.
+          const scope = /requested permissions? to \w+ to (.+?), but you haven't granted/.exec(body);
+          if (scope) onEvent({ kind: "denied", reason: "path", path: scope[1] });
         }
         return;
       }

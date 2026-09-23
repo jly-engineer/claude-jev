@@ -187,7 +187,7 @@ async function probe() {
     const d = await r.json();
     chatReady = Boolean(d.chatReady);
     if (d.backend) $("backend").textContent = d.backend === "agent" ? "via claude code" : "via api";
-    if (d.agent) $("hint").textContent = (d.agent.writable ? "⚠ writable · " : "read-only · ") + d.agent.tools + "  ·  " + d.agent.cwd;
+    if (d.agent) $("hint").textContent = (d.agent.writable ? "⚠ writable · " : "limited · ") + d.agent.tools + "  ·  " + [d.agent.cwd, ...(d.agent.dirs || [])].join("  +  ");
   } catch {
     chatReady = false;
   }
@@ -264,10 +264,16 @@ async function send() {
           // is "pending your permission" and there is nothing to click.
           const warn = document.createElement("div");
           warn.className = "denied";
-          warn.innerHTML = `<b>${esc(data.name)}</b> is disabled for the chat agent, so this turn cannot ` +
-            `complete. It is read-only on purpose &mdash; it runs from a web page. To allow it, set ` +
-            `<code>CLAUDE_JEV_AGENT_DENY</code> (empty allows everything) and ` +
-            `<code>CLAUDE_JEV_AGENT_TOOLS</code>, then restart claude-jev.`;
+          warn.innerHTML = data.reason === "path"
+            // The tool is allowed; the location is not. Edits auto-approve only
+            // inside the working directory, and a browser cannot approve more.
+            ? `Outside the agent's working directory, so the write stalled waiting for a ` +
+              `permission this page cannot grant.<br><code>${esc(data.path || "")}</code><br>` +
+              `Add its folder to <code>CLAUDE_JEV_AGENT_DIRS</code> (semicolon-separated) or point ` +
+              `<code>CLAUDE_JEV_AGENT_CWD</code> at it, then restart claude-jev.`
+            : `<b>${esc(data.name || "That tool")}</b> is disabled for the chat agent, so this turn ` +
+              `cannot complete. To allow it, change <code>CLAUDE_JEV_AGENT_DENY</code> ` +
+              `(empty allows everything) and <code>CLAUDE_JEV_AGENT_TOOLS</code>, then restart claude-jev.`;
           holder.insertBefore(warn, body);
         } else if (ev[1] === "tool") {
           const tip = document.createElement("div");

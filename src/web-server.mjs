@@ -222,7 +222,7 @@ async function agentChat({ res, send, id, text, proxyPort, settingsFile }) {
   s.agentSession ??= newAgentSession();
 
   const cfg = agentConfig();
-  send("backend", { backend: "agent", tools: cfg.tools, deny: cfg.deny, writable: cfg.writable, cwd: cfg.cwd });
+  send("backend", { backend: "agent", tools: cfg.tools, deny: cfg.deny, writable: cfg.writable, cwd: cfg.cwd, dirs: cfg.dirs });
 
   let announced = false;
   try {
@@ -235,7 +235,7 @@ async function agentChat({ res, send, id, text, proxyPort, settingsFile }) {
           send("routed", { model: ev.model, tier: tierOf(ev.model) });
         } else if (ev.kind === "delta") send("delta", { text: ev.text });
         else if (ev.kind === "tool") send("tool", { name: ev.name });
-        else if (ev.kind === "denied") send("denied", { name: ev.name });
+        else if (ev.kind === "denied") send("denied", { reason: ev.reason, name: ev.name, path: ev.path });
         else if (ev.kind === "failed") send("failed", { error: ev.error });
         else if (ev.kind === "done") send("done", { costUsd: ev.costUsd });
       },

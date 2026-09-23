@@ -136,6 +136,8 @@ subagents**:
 CLAUDE_JEV_AGENT_DENY="Write Edit NotebookEdit Bash PowerShell KillShell Task"
 CLAUDE_JEV_AGENT_TOOLS="Read Glob Grep"
 CLAUDE_JEV_AGENT_CWD=/path/to/project     # default: where claude-jev started
+CLAUDE_JEV_AGENT_DIRS=C:ault;D:
+otes   # extra writable roots, semicolon-separated
 CLAUDE_JEV_CHAT=agent|api|off             # default: agent when `claude` is on PATH
 ```
 
@@ -144,6 +146,14 @@ permissions, it does not confine them: with an allowlist of `Read Glob Grep`
 the agent could still call `Write` and create a file. `--disallowed-tools`
 refuses outright — "Write is disabled for this session, in subagents as well as
 here" — which is why the default is expressed as a denylist.
+
+There is a second limit that is easy to mistake for a bug. `acceptEdits` only
+auto-approves edits **inside the working directory**. Anywhere else the tool
+comes back with "Claude requested permissions to write to ..., but you haven't
+granted it yet" and the turn stalls on an approval the browser cannot give — a
+skill that writes to a vault or notes folder hits this immediately. List those
+folders in `CLAUDE_JEV_AGENT_DIRS`, separated by semicolons so Windows paths
+with spaces survive. The chat names the blocked path when it happens.
 
 To let the agent write or run commands, set `CLAUDE_JEV_AGENT_DENY=""` (or
 narrow it) and add the tools to `CLAUDE_JEV_AGENT_TOOLS`. Do that only if you
