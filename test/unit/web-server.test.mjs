@@ -160,6 +160,25 @@ test("regression: progress bars are block-level", async () => {
   assert.match(html, /\.fill \{ display: block;/, ".fill must be block");
 });
 
+test("/api/skills lists commands for the typeahead, behind the token", async () => {
+  assert.equal((await get("/api/skills")).status, 401, "token still required");
+  const res = await get(`/api/skills?t=${token}`);
+  assert.equal(res.status, 200);
+  const { skills } = await res.json();
+  assert.ok(Array.isArray(skills));
+  for (const s of skills) {
+    assert.equal(typeof s.name, "string");
+    assert.equal(typeof s.description, "string");
+    assert.ok(s.name.length > 0);
+  }
+});
+
+test("the chat page wires up the slash typeahead", async () => {
+  const html = await (await get("/chat")).text();
+  assert.ok(html.includes('id="menu"'), "menu container present");
+  assert.ok(html.includes("/api/skills"), "chat page fetches the command list");
+});
+
 test("unknown api routes 404 rather than falling through to the page", async () => {
   assert.equal((await get(`/api/nope?t=${token}`)).status, 404);
 });

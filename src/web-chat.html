@@ -106,6 +106,26 @@ textarea::placeholder { color: rgba(240,238,233,0.25); }
 .send:hover:not(:disabled) { background: #fff; transform: scale(1.03); }
 .send:active:not(:disabled) { transform: scale(0.97); }
 .send:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+/* ── Slash typeahead ── */
+.composer { position: relative; }
+.menu {
+  position: absolute; left: clamp(20px, 5vw, 32px); right: 150px; bottom: calc(100% - 6px);
+  background: var(--surface); border: 1px solid rgba(212,163,115,0.25);
+  border-radius: 22px; overflow: hidden; max-height: 320px; overflow-y: auto;
+  box-shadow: 0 40px 70px -30px rgba(0,0,0,0.85); z-index: 5;
+  scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.12) transparent;
+}
+.menu::-webkit-scrollbar { width: 7px; }
+.menu::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 100px; }
+.menu[hidden] { display: none; }
+.opt { padding: 11px 20px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.03); }
+.opt:last-child { border-bottom: 0; }
+.opt.on { background: rgba(212,163,115,0.10); }
+.opt .cmd { font-size: 13.5px; font-weight: 500; color: var(--paper); }
+.opt .cmd em { font-style: normal; color: var(--clay); }
+.opt .src { font-size: 9.5px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(240,238,233,0.25); margin-left: 8px; }
+.opt .desc { font-size: 11.5px; color: rgba(240,238,233,0.38); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menu .none { padding: 14px 20px; font-size: 12.5px; color: rgba(240,238,233,0.3); }
 .hint { max-width: 860px; margin: 0 auto; padding: 0 clamp(20px, 5vw, 32px) 16px; font-size: 11px; color: rgba(240,238,233,0.22); }
 .notice { max-width: 860px; margin: 0 auto; padding: 22px clamp(20px, 5vw, 32px) 26px; font-size: 13.5px; line-height: 1.65; color: rgba(240,238,233,0.45); }
 .notice code { color: var(--clay); font-size: 12.5px; }
@@ -130,7 +150,7 @@ textarea::placeholder { color: rgba(240,238,233,0.25); }
   <div class="log" id="log">
     <div class="welcome" id="welcome">
       <span class="serif">Ask it something.</span>
-      Routed by Jev, recorded on the dashboard.
+      Routed by Jev, recorded on the dashboard. Type <code>/</code> for your skills.
     </div>
   </div>
 </main>
@@ -138,6 +158,7 @@ textarea::placeholder { color: rgba(240,238,233,0.25); }
 <footer>
   <div id="composerWrap">
     <div class="composer">
+      <div class="menu" id="menu" hidden></div>
       <div class="field"><textarea id="input" rows="1" placeholder="Ask something&hellip;"></textarea></div>
       <button class="send" id="send">Send</button>
     </div>
@@ -272,6 +293,13 @@ async function send() {
 
 $("send").addEventListener("click", send);
 $("input").addEventListener("keydown", (e) => {
+  // The menu owns these keys while it is open.
+  if (!$("menu").hidden && matches.length) {
+    if (e.key === "ArrowDown") { e.preventDefault(); active = (active + 1) % matches.length; return renderMenu(); }
+    if (e.key === "ArrowUp")   { e.preventDefault(); active = (active - 1 + matches.length) % matches.length; return renderMenu(); }
+    if (e.key === "Tab" || e.key === "Enter") { e.preventDefault(); return choose(active); }
+    if (e.key === "Escape")    { e.preventDefault(); return closeMenu(); }
+  }
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
 });
 $("input").addEventListener("input", (e) => {
@@ -281,7 +309,7 @@ $("input").addEventListener("input", (e) => {
 $("clear").addEventListener("click", async (e) => {
   e.preventDefault();
   if (streaming) return;
-  $("log").innerHTML = `<div class="welcome" id="welcome"><span class="serif">Ask it something.</span>Routed by Jev, recorded on the dashboard.</div>`;
+  $("log").innerHTML = `<div class="welcome" id="welcome"><span class="serif">Ask it something.</span>Routed by Jev, recorded on the dashboard. Type <code>/</code> for your skills.</div>`;
   await fetch(api("/api/chat/reset"), {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-Jev-Token": TOKEN },
@@ -289,6 +317,88 @@ $("clear").addEventListener("click", async (e) => {
   }).catch(() => {});
 });
 
+// ── Slash-command typeahead ───────────────────────────────────────────────
+let skills = [];
+let matches = [];
+let active = 0;
+
+async function loadSkills() {
+  try {
+    const r = await fetch(api("/api/skills"));
+    if (r.ok) skills = (await r.json()).skills || [];
+  } catch { /* typeahead is optional */ }
+}
+
+/** The "/word" being typed, but only when it opens the message. */
+function currentToken() {
+  const el = $("input");
+  const upto = el.value.slice(0, el.selectionStart);
+  const m = /^\/(\S*)$/.exec(upto);
+  return m ? m[1] : null;
+}
+
+function closeMenu() { $("menu").hidden = true; matches = []; active = 0; }
+
+function renderMenu() {
+  const q = currentToken();
+  if (q === null || !skills.length) return closeMenu();
+
+  const needle = q.toLowerCase();
+  matches = skills
+    .filter((s) => s.name.toLowerCase().includes(needle))
+    .sort((a, b) => {
+      // Prefix matches first; they are almost always what was meant.
+      const ap = a.name.toLowerCase().startsWith(needle) ? 0 : 1;
+      const bp = b.name.toLowerCase().startsWith(needle) ? 0 : 1;
+      return ap - bp || a.name.localeCompare(b.name);
+    })
+    .slice(0, 40);
+
+  if (!matches.length) {
+    $("menu").innerHTML = `<div class="none">No command matches &ldquo;/${esc(q)}&rdquo;</div>`;
+    $("menu").hidden = false;
+    return;
+  }
+  if (active >= matches.length) active = 0;
+
+  $("menu").innerHTML = matches.map((s, i) => {
+    const at = s.name.toLowerCase().indexOf(needle);
+    const shown = needle && at >= 0
+      ? esc(s.name.slice(0, at)) + "<em>" + esc(s.name.slice(at, at + needle.length)) + "</em>" + esc(s.name.slice(at + needle.length))
+      : esc(s.name);
+    return `<div class="opt${i === active ? " on" : ""}" data-i="${i}">` +
+      `<div class="cmd">/${shown}<span class="src">${esc(s.source)}</span></div>` +
+      (s.description ? `<div class="desc">${esc(s.description)}</div>` : "") +
+      `</div>`;
+  }).join("");
+  $("menu").hidden = false;
+  $("menu").querySelector(".opt.on")?.scrollIntoView({ block: "nearest" });
+}
+
+function choose(i) {
+  const s = matches[i];
+  if (!s) return;
+  const el = $("input");
+  const rest = el.value.slice(el.selectionStart);
+  el.value = "/" + s.name + " " + rest.replace(/^\s+/, "");
+  const caret = s.name.length + 2;
+  el.setSelectionRange(caret, caret);
+  closeMenu();
+  el.focus();
+}
+
+$("menu").addEventListener("mousedown", (e) => {
+  const opt = e.target.closest(".opt");
+  if (!opt) return;
+  e.preventDefault();               // keep focus in the textarea
+  choose(Number(opt.dataset.i));
+});
+
+$("input").addEventListener("input", renderMenu);
+$("input").addEventListener("click", renderMenu);
+$("input").addEventListener("blur", () => setTimeout(closeMenu, 120));
+
+loadSkills();
 probe();
 $("input").focus();
 </script>

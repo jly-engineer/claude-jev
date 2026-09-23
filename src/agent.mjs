@@ -2,6 +2,7 @@ import { spawn, execSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { captureFromRateLimitEvent } from "./usage-state.mjs";
 import { AUTO_MODEL } from "./config.mjs";
+import { adoptSlashCommands } from "./skills.mjs";
 
 /**
  * Chat backed by headless Claude Code.
@@ -112,6 +113,11 @@ export function runAgentTurn({ prompt, sessionId, started, proxyPort, settingsFi
       if (evt.type === "rate_limit_event" && evt.rate_limit_info) {
         captureFromRateLimitEvent(evt.rate_limit_info);
         return;
+      }
+      // Claude Code's own list of slash commands, free on every turn. It
+      // knows plugin namespacing and precedence; our scan only knows prose.
+      if (evt.type === "system" && evt.subtype === "init" && evt.slash_commands) {
+        adoptSlashCommands(evt.slash_commands);
       }
       if (evt.session_id) resolvedSession = evt.session_id;
 

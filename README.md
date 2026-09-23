@@ -118,6 +118,16 @@ Pro/Max subscription works — no API key needed.** The child authenticates
 itself; `claude-jev` never sees or stores the credential. Usage counts against
 the same 5-hour and weekly caps the gauges show.
 
+Type `/` in the composer to autocomplete your skills and slash commands —
+user skills, project skills, plugin skills (namespaced, e.g. `caveman:caveman-help`)
+and `.claude/commands` files. Arrow keys to move, Tab or Enter to complete,
+Escape to dismiss. They run for real: `/caveman-help` invokes the skill.
+
+The list is scanned from disk so it works immediately, then replaced by Claude
+Code's own `slash_commands` list after the first turn, which also picks up
+built-ins. Note the agent's tool allowlist still applies — a skill that needs
+`Bash` or `Edit` will not get far with the read-only default.
+
 It is a real agent, not a chat box, so it has tools. Since it is driven from a
 browser page the default tool set is **read-only**:
 
@@ -201,7 +211,8 @@ src/dashboard.mjs       Terminal savings renderer
 src/usage-state.mjs     In-memory Claude usage cap state
 src/web-server.mjs      Dashboard HTTP server
 src/web-dashboard.html  Dashboard UI (metrics)
-src/web-chat.html       Full-screen chat UI (/chat)
+src/web-chat.html       Full-screen chat UI (/chat) with slash autocomplete
+src/skills.mjs          Slash-command discovery for the typeahead
 src/chat.mjs            Direct-API chat path (tier selection + history)
 src/agent.mjs           Headless Claude Code chat path (subscription, tools)
 src/env.mjs             ~/.claude-jev.env loader (handles UTF-16)

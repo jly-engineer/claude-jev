@@ -8,6 +8,7 @@ import { getUsageState } from "./usage-state.mjs";
 import { session, resetSession, planTurn, commitTurn } from "./chat.mjs";
 import { agentAvailable, newAgentSession, runAgentTurn, agentConfig } from "./agent.mjs";
 import { TIER_NAMES, tierSpec } from "./config.mjs";
+import { listSkills } from "./skills.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const HTML_PATH = join(HERE, "web-dashboard.html");
@@ -117,6 +118,12 @@ export async function startDashboardServer(preferredPort = 0, opts = {}) {
         backend,
         agent: backend === "agent" ? agentConfig() : null,
       }));
+      return;
+    }
+
+    if (url.pathname === "/api/skills") {
+      res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+      res.end(JSON.stringify({ skills: listSkills(agentConfig().cwd) }));
       return;
     }
 
