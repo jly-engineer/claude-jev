@@ -89,6 +89,23 @@ claude-jev savings --reset      # clear the ledger
   opus        1 reqs    15.0k tokens     $0.00 saved  (actual: $0.53)
 ```
 
+### Reading the token numbers
+
+The dashboards lead with **new** tokens — fresh input plus cache writes — and
+show **cached** separately. That distinction matters more than it sounds.
+
+The API is stateless, so every request re-sends the whole conversation. Prompt
+caching means the repeated prefix is served from cache at a tenth of the input
+rate rather than reprocessed. On top of that, one chat turn runs an agent loop
+of several requests, and each request's cache read is roughly the previous
+request's entire input.
+
+Summing raw input therefore counts the same conversation over and over: a real
+ledger here showed 5.7M "tokens" against 764k of actual new content, for the
+same $1.84. The raw figure tracks conversation length, not work done, and reads
+as alarming for no reason. Costs were always right; only the token column
+misled.
+
 ### Web dashboard
 
 A live web dashboard runs automatically alongside every `claude-jev` session at **http://127.0.0.1:3579**. Or launch it standalone:

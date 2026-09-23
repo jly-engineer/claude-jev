@@ -211,7 +211,7 @@ footer { padding-top: 12px; font-size: 12px; color: rgba(240,238,233,0.22); disp
   </div>
 
   <footer>
-    <span>Every turn priced against <span id="baselineName">the baseline model</span>.</span>
+    <span>Priced against <span id="baselineName">the baseline model</span>. &ldquo;Cached&rdquo; tokens are prefix re-reads, billed at a tenth.</span>
     <span id="updated"></span>
   </footer>
 </div>
@@ -255,11 +255,14 @@ async function refresh() {
   $("saved").textContent = money(saved);
   $("savedPct").textContent = pct(saved, month.baselineCost).toFixed(1) + "% less, 30 days";
   $("spend").textContent = money(month.cost);
+  // New tokens, not total input: a turn re-sends its whole prefix on every
+  // request, so summing input counts the same conversation over and over.
   $("spendDetail").textContent =
-    tokens(month.inputTokens + month.outputTokens) + " tokens · " + month.requests + " requests";
+    tokens(month.newInputTokens + month.outputTokens) + " new tokens · " + month.requests + " requests";
   $("base").textContent = money(month.baselineCost);
   $("baseDetail").textContent =
-    tokens(month.inputTokens) + " in · " + tokens(month.outputTokens) + " out";
+    tokens(month.newInputTokens) + " in · " + tokens(month.outputTokens) + " out · " +
+    tokens(month.cacheReadTokens) + " cached";
 
   paintWindows({ Today: today, "7 days": week, "30 days": month });
   paintCaps(data.usage);
@@ -311,7 +314,7 @@ function paintTiers(byTier) {
     const saved = b.baselineCost - b.cost;
     return `<div class="tier-row">
       <span><span class="badge ${tierClass(t)}">${esc(t)}</span></span>
-      <span class="meta">${b.requests} request${b.requests === 1 ? "" : "s"} &middot; ${tokens(b.inputTokens + b.outputTokens)} tokens</span>
+      <span class="meta">${b.requests} request${b.requests === 1 ? "" : "s"} &middot; ${tokens(b.newInputTokens + b.outputTokens)} new &middot; ${tokens(b.cacheReadTokens)} cached</span>
       <span class="money"><b>${money(saved)}</b>actual ${money(b.cost)}</span>
     </div>`;
   });
@@ -326,16 +329,20 @@ function paintRecent(events) {
     return;
   }
   $("recent").innerHTML = `<table><thead><tr>
-      <th>When</th><th>Tier</th><th class="right">Tokens</th>
+      <th>When</th><th>Tier</th><th class="right">New</th><th class="right">Cached</th>
       <th class="right">Actual</th><th class="right">Saved</th>
     </tr></thead><tbody>` +
     rows.map((e) => {
       const saved = (e.baselineCost || 0) - (e.cost || 0);
-      const cached = e.cacheReadTokens ? ` <span style="opacity:.45">(${tokens(e.cacheReadTokens)} cached)</span>` : "";
+      // Pre-cache-aware rows have no breakdown; their input was all new.
+      const fresh = e.uncachedInputTokens != null
+        ? e.uncachedInputTokens + (e.cacheWriteTokens || 0)
+        : (e.inputTokens || 0);
       return `<tr>
         <td>${new Date(e.ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</td>
         <td><span class="badge ${tierClass(e.tier)}">${esc(e.tier || "?")}</span></td>
-        <td class="right">${tokens((e.inputTokens || 0) + (e.outputTokens || 0))}${cached}</td>
+        <td class="right">${tokens(fresh + (e.outputTokens || 0))}</td>
+        <td class="right" style="color:rgba(240,238,233,.3)">${e.cacheReadTokens ? tokens(e.cacheReadTokens) : "&mdash;"}</td>
         <td class="right">${money(e.cost)}</td>
         <td class="right" style="color:var(--clay)">${money(saved)}</td>
       </tr>`;

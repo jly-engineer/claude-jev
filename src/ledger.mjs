@@ -124,18 +124,37 @@ export function aggregate(events) {
   const todayCutoff = midnight.getTime();
   const weekCutoff = now - 7 * dayMs;
 
-  const buckets = {
-    today: { requests: 0, inputTokens: 0, outputTokens: 0, cost: 0, baselineCost: 0 },
-    week:  { requests: 0, inputTokens: 0, outputTokens: 0, cost: 0, baselineCost: 0 },
-    month: { requests: 0, inputTokens: 0, outputTokens: 0, cost: 0, baselineCost: 0 },
-  };
+  const empty = () => ({
+    requests: 0, inputTokens: 0, outputTokens: 0,
+    newInputTokens: 0, cacheReadTokens: 0,
+    cost: 0, baselineCost: 0,
+  });
+  const buckets = { today: empty(), week: empty(), month: empty() };
   const byTier = {};
 
   for (const ev of events) {
+    // Split input into work actually done versus conversation re-sent.
+    //
+    // An agent turn makes several requests, and each one's cache read is
+    // roughly the previous request's whole input, so the same prefix is
+    // counted again every time. Summing inputTokens therefore reports a
+    // number that grows with conversation length rather than with effort —
+    // it reads as alarming and means very little. Cache reads bill at a tenth
+    // and are a saving, so they are tracked separately.
+    //
+    // Events written before cost accounting understood caching have no
+    // breakdown; their inputTokens were uncached-only, so they count as new.
+    const cacheRead = ev.cacheReadTokens ?? 0;
+    const fresh = ev.uncachedInputTokens != null
+      ? ev.uncachedInputTokens + (ev.cacheWriteTokens ?? 0)
+      : ev.inputTokens ?? 0;
+
     const add = (b) => {
       b.requests++;
       b.inputTokens += ev.inputTokens ?? 0;
       b.outputTokens += ev.outputTokens ?? 0;
+      b.newInputTokens += fresh;
+      b.cacheReadTokens += cacheRead;
       b.cost += ev.cost ?? 0;
       b.baselineCost += ev.baselineCost ?? 0;
     };
@@ -146,7 +165,7 @@ export function aggregate(events) {
     if (ev.ts >= todayCutoff) add(buckets.today);
 
     const tier = ev.tier ?? "unknown";
-    byTier[tier] ??= { requests: 0, inputTokens: 0, outputTokens: 0, cost: 0, baselineCost: 0 };
+    byTier[tier] ??= empty();
     add(byTier[tier]);
   }
 

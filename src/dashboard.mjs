@@ -41,11 +41,12 @@ function bar(ratio, width = 20) {
 function renderWindow(label, bucket, labelWidth = 14) {
   const saved = bucket.baselineCost - bucket.cost;
   const savingsRatio = bucket.baselineCost > 0 ? saved / bucket.baselineCost : 0;
-  const totalTokens = bucket.inputTokens + bucket.outputTokens;
+  // New work, not re-sent prefix. See aggregate() for why.
+  const totalTokens = bucket.newInputTokens + bucket.outputTokens;
 
   const paddedLabel = label.padEnd(labelWidth);
   const savingsStr = `${BOLD}${pct(saved, bucket.baselineCost)}${RST} saved`;
-  const tokenStr = `${tokens(totalTokens)} tokens`;
+  const tokenStr = `${tokens(totalTokens)} new`;
   const costStr = `${GREEN}${dollars(saved)} saved${RST}`;
 
   return (
@@ -64,11 +65,11 @@ function renderTierBreakdown(byTier) {
   for (const [tier, b] of tiers) {
     const color = TIER_COLORS[tier] ?? WHITE;
     const saved = b.baselineCost - b.cost;
-    const totalTokens = b.inputTokens + b.outputTokens;
+    const totalTokens = b.newInputTokens + b.outputTokens;
     lines.push(
       `  ${color}${BOLD}${tier.padEnd(8)}${RST} ` +
         `${String(b.requests).padStart(4)} reqs  ` +
-        `${tokens(totalTokens).padStart(7)} tokens  ` +
+        `${tokens(totalTokens).padStart(7)} new  ` +
         `${GREEN}${dollars(saved).padStart(8)} saved${RST}  ` +
         `${DIM}(actual: ${dollars(b.cost)})${RST}`,
     );
@@ -100,7 +101,7 @@ export function renderDashboard({ days = 30, json = false } = {}) {
   const { today, week, month, byTier } = aggregate(events);
 
   const totalSaved = month.baselineCost - month.cost;
-  const totalTokens = month.inputTokens + month.outputTokens;
+  const totalTokens = month.newInputTokens + month.outputTokens;
 
   const lines = [
     "",
@@ -117,7 +118,8 @@ export function renderDashboard({ days = 30, json = false } = {}) {
     renderTierBreakdown(byTier),
     "",
     `${DIM}  ─────────────────────────────────────────────────────────────────${RST}`,
-    `  ${BOLD}Total:${RST}  ${tokens(totalTokens)} tokens across ${month.requests} requests`,
+    `  ${BOLD}Total:${RST}  ${tokens(totalTokens)} new tokens across ${month.requests} requests`,
+    `  ${DIM}         ${tokens(month.cacheReadTokens)} cached (prefix re-reads, billed at a tenth)${RST}`,
     `  ${BOLD}Actual cost:${RST}     ${dollars(month.cost)}`,
     `  ${BOLD}Opus 4.6 would be:${RST} ${dollars(month.baselineCost)}`,
     `  ${GREEN}${BOLD}You saved:${RST}       ${GREEN}${BOLD}${dollars(totalSaved)}${RST}  ${DIM}(${pct(totalSaved, month.baselineCost)})${RST}`,

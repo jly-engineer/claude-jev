@@ -85,6 +85,37 @@ test("regression: Today is since local midnight, not a rolling 24 hours", () => 
   assert.equal(a.month.requests, 3);
 });
 
+test("regression: new tokens are separated from re-read prefix", () => {
+  // One agent turn makes several requests, and each request's cache read is
+  // roughly the previous request's entire input. Summing inputTokens counts
+  // the same conversation again every time, producing a number that tracks
+  // conversation length rather than work done.
+  seed(
+    JSON.stringify({ ts: now - 3000, tier: "haiku", inputTokens: 37049,
+      uncachedInputTokens: 3, cacheWriteTokens: 37046, cacheReadTokens: 0,
+      outputTokens: 90, cost: 0.047, baselineCost: 0.2 }),
+    JSON.stringify({ ts: now - 2000, tier: "haiku", inputTokens: 37285,
+      uncachedInputTokens: 7, cacheWriteTokens: 232, cacheReadTokens: 37046,
+      outputTokens: 56, cost: 0.004, baselineCost: 0.02 }),
+  );
+  const a = aggregate(readEvents(30));
+  assert.equal(a.month.inputTokens, 74334, "raw input still available");
+  assert.equal(a.month.newInputTokens, 37288, "3 + 37046 + 7 + 232");
+  assert.equal(a.month.cacheReadTokens, 37046);
+  assert.ok(a.month.newInputTokens < a.month.inputTokens,
+    "new must be the smaller, honest figure");
+});
+
+test("events predating cache accounting count entirely as new", () => {
+  // Their inputTokens were uncached-only, so attributing them to cache reads
+  // would understate real work on old rows.
+  seed(JSON.stringify({ ts: now - 1000, tier: "haiku", inputTokens: 5000,
+    outputTokens: 200, cost: 0.01, baselineCost: 0.03 }));
+  const a = aggregate(readEvents(30));
+  assert.equal(a.month.newInputTokens, 5000);
+  assert.equal(a.month.cacheReadTokens, 0);
+});
+
 test("aggregate totals by tier", () => {
   seed(
     JSON.stringify({ ts: now - 1000, tier: "haiku", inputTokens: 10, outputTokens: 2, cost: 1, baselineCost: 4 }),
@@ -93,6 +124,8 @@ test("aggregate totals by tier", () => {
   const a = aggregate(readEvents(30));
   assert.equal(a.byTier.haiku.requests, 1);
   assert.equal(a.byTier.opus.requests, 1);
+  assert.equal(typeof a.byTier.haiku.newInputTokens, "number", "tier buckets carry the split too");
+  assert.equal(typeof a.byTier.haiku.cacheReadTokens, "number");
   assert.equal(a.month.cost, 4);
   assert.equal(a.month.baselineCost, 7);
 });
