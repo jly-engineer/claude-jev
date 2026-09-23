@@ -30,7 +30,17 @@ export function loadEnvFile() {
         const eq = trimmed.indexOf("=");
         if (eq < 1) continue;
         const key = trimmed.slice(0, eq).trim();
-        const val = trimmed.slice(eq + 1).trim().replace(/^["']|["']$/g, "");
+        let rawVal = trimmed.slice(eq + 1).trim();
+        // Strip an inline `# comment` — but only outside quotes, so a `#`
+        // inside a quoted value (e.g. a token) survives.
+        const quoted = /^"([^"]*)"|^'([^']*)'/.exec(rawVal);
+        if (quoted) {
+          rawVal = quoted[1] ?? quoted[2];
+        } else {
+          const hash = rawVal.indexOf("#");
+          if (hash >= 0) rawVal = rawVal.slice(0, hash).trim();
+        }
+        const val = rawVal.replace(/^["']|["']$/g, "");
         if (!process.env[key]) process.env[key] = val;
       }
     } catch { /* skip unreadable */ }
