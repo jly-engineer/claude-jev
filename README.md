@@ -161,7 +161,21 @@ src/dashboard.mjs       Terminal savings renderer
 src/usage-state.mjs     In-memory Claude usage cap state
 src/web-server.mjs      Dashboard HTTP server
 src/web-dashboard.html  Web dashboard UI
+src/env.mjs             ~/.claude-jev.env loader (handles UTF-16)
+test/unit/              Offline unit suite (npm test)
+test/routing/           Routing accuracy cases + runner (npm run test:routing)
 ```
+
+## Tests
+
+```bash
+npm test                  # unit suite — free, offline, no API keys
+npm run test:routing      # routing accuracy against 25 labelled prompts (costs money)
+```
+
+The unit suite runs on `node:test` with no network. The routing suite makes one
+live Jev call per case and exits non-zero below 85% accuracy — run it when you
+change the tier guidance in `src/config.mjs`. See [`test/README.md`](test/README.md).
 
 ## Requirements
 

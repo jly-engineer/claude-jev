@@ -6,8 +6,15 @@
   "bin": {
     "claude-jev": "./bin/claude-jev.mjs"
   },
+  "scripts": {
+    "test": "node --test \"test/unit/*.test.mjs\"",
+    "test:routing": "node test/routing/run.mjs"
+  },
   "dependencies": {
     "@typesafe-ai/sdk": "^0.6.0"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "^0.127.0"
   },
   "engines": {
     "node": ">=20"

@@ -1,38 +1,12 @@
 #!/usr/bin/env node
 import { spawn, execSync } from "node:child_process";
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { writeFileSync, mkdirSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join, dirname } from "node:path";
+import { loadEnvFile } from "../src/env.mjs";
 import { startProxy } from "../src/proxy.mjs";
 import { AUTO_MODEL, behavesAsModel } from "../src/config.mjs";
 import { startDashboardServer } from "../src/web-server.mjs";
-
-// ── Load .env file ──────────────────────────────────────────────────────────
-function loadEnvFile() {
-  for (const path of [
-    join(homedir(), ".claude-jev.env"),
-    join(homedir(), ".jev-router.env"),
-  ]) {
-    try {
-      if (!existsSync(path)) continue;
-      let raw = readFileSync(path);
-      // Handle UTF-16 LE BOM (PowerShell's default encoding)
-      if (raw[0] === 0xff && raw[1] === 0xfe) {
-        raw = Buffer.from(raw.toString("utf16le"));
-      }
-      const text = raw.toString("utf8").replace(/\0/g, "");
-      for (const line of text.split(/\r?\n/)) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith("#")) continue;
-        const eq = trimmed.indexOf("=");
-        if (eq < 1) continue;
-        const key = trimmed.slice(0, eq).trim();
-        const val = trimmed.slice(eq + 1).trim().replace(/^["']|["']$/g, "");
-        if (!process.env[key]) process.env[key] = val;
-      }
-    } catch { /* skip unreadable */ }
-  }
-}
 
 // ── Find claude CLI ─────────────────────────────────────────────────────────
 function findClaude() {

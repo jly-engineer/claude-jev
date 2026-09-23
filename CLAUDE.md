@@ -85,29 +85,27 @@ Default starting tier is **haiku**. Jev upgrades when needed.
 ## Testing
 
 ```bash
-# Verify modules parse
-node -e "import './src/proxy.mjs'"
+npm test                  # unit suite: free, offline, no keys, ~200ms
+npm run test:routing      # routing accuracy: COSTS MONEY, one Jev call per case
+```
 
-# Test routing policy
-node -e "
-import { decide } from './src/router.mjs';
-console.log(decide({ jev: { choice: 'haiku', confidence: 0.95 }, current: 'sonnet' }));
-console.log(decide({ jev: null, current: 'sonnet' }));
-"
+`test/README.md` covers both, including how to read the accuracy number
+honestly. Short version:
 
-# Test dashboard with seeded data
-node -e "
-import { record, reset } from './src/ledger.mjs';
-import { cost, baselineCost } from './src/pricing.mjs';
-reset();
-const usage = { inputTokens: 5000, outputTokens: 2000, cacheWrite5mTokens: 12000, cacheReadTokens: 80000 };
-record({ model: 'claude-haiku-4-5-20251001', tier: 'haiku',
-  inputTokens: 97000, outputTokens: 2000,
-  cost: cost('claude-haiku-4-5-20251001', usage), baselineCost: baselineCost(usage) });
-import { renderDashboard } from './src/dashboard.mjs';
-console.log(renderDashboard());
-"
+- `test/unit/*.test.mjs` is `node:test`, no network. Tests tagged `regression:`
+  encode a bug that shipped once — do not delete one casually.
+- `test/routing/cases.mjs` is the single source of truth for the 25 routing
+  cases and their hand-labelled tiers. Changing an `expected` changes the spec.
+- `test/routing/run.mjs` takes `--only T08,T09` and `--json`. It exits 2
+  without a Jev key, and non-zero below 85% accuracy.
+- `test/routing/judge.mjs` is an advisory second opinion from a frontier model.
+  Its rubric is deliberately a separate copy, not an import of `QUESTIONS` —
+  grading the router against its own guidance would be circular.
 
+Run the routing suite when you touch the tier guidance in `src/config.mjs` or
+the policy in `decide()`, not on every commit.
+
+```bash
 # Debug a live session
 JEV_DEBUG=1 claude-jev
 cat ~/.claude-jev/debug.log
