@@ -14,16 +14,28 @@ import { adoptSlashCommands } from "./skills.mjs";
  * because the thing making the request genuinely is Claude Code. We never see
  * or store the credential.
  *
- * It is a real agent, not a chat box — it has tools. The default tool set is
- * read-only, because this is driven from a browser page. Widen it deliberately
- * with CLAUDE_JEV_AGENT_TOOLS if that is what you want.
+ * It is a real agent, not a chat box — it has tools, and it is driven from a
+ * browser page.
+ *
+ * The safety boundary is --disallowed-tools, NOT --allowed-tools. An allowlist
+ * grants; it does not confine. With --permission-mode acceptEdits, passing
+ * "--allowed-tools Read Glob Grep" still let the agent call Write and create a
+ * file. A denylist is refused outright ("No such tool available: Write. Write
+ * is disabled for this session, in subagents as well as here"), which is what
+ * we actually want. Change DEFAULT_DENY only with that in mind.
  */
 
 const DEFAULT_TOOLS = "Read Glob Grep";
+const DEFAULT_DENY = "Write Edit NotebookEdit Bash PowerShell KillShell Task";
 
 export function agentConfig() {
+  // An explicit empty value means "deny nothing" — a deliberate opt-in to a
+  // writable agent, not an accident.
+  const deny = process.env.CLAUDE_JEV_AGENT_DENY ?? DEFAULT_DENY;
   return {
     tools: (process.env.CLAUDE_JEV_AGENT_TOOLS ?? DEFAULT_TOOLS).trim(),
+    deny: deny.trim(),
+    writable: deny.trim() === "",
     cwd: process.env.CLAUDE_JEV_AGENT_CWD || process.cwd(),
     permissionMode: process.env.CLAUDE_JEV_AGENT_PERMISSION || "acceptEdits",
   };
@@ -52,6 +64,26 @@ export const agentAvailable = () => Boolean(findClaude());
 export const newAgentSession = () => randomUUID();
 
 /**
+ * Build the CLI arguments for one turn. Exported so the safety flags can be
+ * asserted without spawning anything.
+ */
+export function buildArgs({ prompt, sessionId, started, settingsFile }) {
+  const { tools, deny, permissionMode } = agentConfig();
+  return [
+    "-p", prompt,
+    "--output-format", "stream-json",
+    "--verbose",
+    "--permission-mode", permissionMode,
+    // First turn opens the session; later turns continue it.
+    ...(started ? ["--resume", sessionId] : ["--session-id", sessionId]),
+    ...(tools ? ["--allowed-tools", ...tools.split(/\s+/)] : []),
+    // The actual boundary. See the note at the top of this file.
+    ...(deny ? ["--disallowed-tools", ...deny.split(/\s+/)] : []),
+    ...(settingsFile ? ["--settings", settingsFile] : []),
+  ];
+}
+
+/**
  * Run one turn. Calls `onEvent` with:
  *   { kind: "routed", model }      the model the child reported using
  *   { kind: "delta", text }        assistant text
@@ -65,17 +97,8 @@ export function runAgentTurn({ prompt, sessionId, started, proxyPort, settingsFi
   const claudePath = findClaude();
   if (!claudePath) return Promise.reject(new Error("claude CLI not found on PATH"));
 
-  const { tools, cwd, permissionMode } = agentConfig();
-  const args = [
-    "-p", prompt,
-    "--output-format", "stream-json",
-    "--verbose",
-    "--permission-mode", permissionMode,
-    // First turn opens the session; later turns continue it.
-    ...(started ? ["--resume", sessionId] : ["--session-id", sessionId]),
-    ...(tools ? ["--allowed-tools", ...tools.split(/\s+/)] : []),
-    ...(settingsFile ? ["--settings", settingsFile] : []),
-  ];
+  const { cwd } = agentConfig();
+  const args = buildArgs({ prompt, sessionId, started, settingsFile });
 
   const env = { ...process.env, ANTHROPIC_MODEL: AUTO_MODEL };
   if (proxyPort) env.ANTHROPIC_BASE_URL = `http://127.0.0.1:${proxyPort}`;
@@ -130,6 +153,18 @@ export function runAgentTurn({ prompt, sessionId, started, proxyPort, settingsFi
           } else if (block.type === "tool_use") {
             onEvent({ kind: "tool", name: block.name });
           }
+        }
+        return;
+      }
+      // A blocked tool comes back as an errored tool_result, not an event of
+      // its own. Without this the agent just says it needs permission and the
+      // browser has no way to grant it — a dead end with no explanation.
+      if (evt.type === "user" && Array.isArray(evt.message?.content)) {
+        for (const block of evt.message.content) {
+          if (block?.type !== "tool_result" || !block.is_error) continue;
+          const body = typeof block.content === "string" ? block.content : JSON.stringify(block.content ?? "");
+          const m = /No such tool available: (\w+)|(\w+) is disabled for this session/.exec(body);
+          if (m) onEvent({ kind: "denied", name: m[1] || m[2] });
         }
         return;
       }

@@ -72,6 +72,8 @@ main::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radiu
 .msg.bot .bubble.err { border-color: rgba(180,85,63,0.4); color: #d98b72; }
 .routed { display: flex; align-items: center; gap: 9px; font-size: 11px; color: rgba(240,238,233,0.3); flex-wrap: wrap; }
 .tool { font-size: 11px; color: var(--sage); opacity: 0.75; }
+.denied { font-size: 11.5px; color: #d98b72; background: rgba(180,85,63,0.10); border: 1px solid rgba(180,85,63,0.28); border-radius: 14px; padding: 9px 14px; line-height: 1.5; }
+.denied code { color: var(--clay); font-size: 11px; }
 .tool::before { content: "\2699  "; }
 .badge { display: inline-block; padding: 5px 13px; border-radius: 100px; font-size: 10px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; }
 .badge.haiku  { background: rgba(140,163,145,0.16); color: var(--sage); }
@@ -185,7 +187,7 @@ async function probe() {
     const d = await r.json();
     chatReady = Boolean(d.chatReady);
     if (d.backend) $("backend").textContent = d.backend === "agent" ? "via claude code" : "via api";
-    if (d.agent) $("hint").textContent = "Tools: " + d.agent.tools + "  ·  " + d.agent.cwd;
+    if (d.agent) $("hint").textContent = (d.agent.writable ? "⚠ writable · " : "read-only · ") + d.agent.tools + "  ·  " + d.agent.cwd;
   } catch {
     chatReady = false;
   }
@@ -257,6 +259,16 @@ async function send() {
         const stick = atBottom();
         if (ev[1] === "backend") {
           $("backend").textContent = data.backend === "agent" ? "via claude code" : "via api";
+        } else if (ev[1] === "denied") {
+          // Say why, and how to change it. Otherwise the agent just claims it
+          // is "pending your permission" and there is nothing to click.
+          const warn = document.createElement("div");
+          warn.className = "denied";
+          warn.innerHTML = `<b>${esc(data.name)}</b> is disabled for the chat agent, so this turn cannot ` +
+            `complete. It is read-only on purpose &mdash; it runs from a web page. To allow it, set ` +
+            `<code>CLAUDE_JEV_AGENT_DENY</code> (empty allows everything) and ` +
+            `<code>CLAUDE_JEV_AGENT_TOOLS</code>, then restart claude-jev.`;
+          holder.insertBefore(warn, body);
         } else if (ev[1] === "tool") {
           const tip = document.createElement("div");
           tip.className = "tool";

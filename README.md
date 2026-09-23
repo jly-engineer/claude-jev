@@ -128,18 +128,28 @@ Code's own `slash_commands` list after the first turn, which also picks up
 built-ins. Note the agent's tool allowlist still applies — a skill that needs
 `Bash` or `Edit` will not get far with the read-only default.
 
-It is a real agent, not a chat box, so it has tools. Since it is driven from a
-browser page the default tool set is **read-only**:
+It is a real agent, not a chat box, so it has tools — and it is driven from a
+web page. By default it **cannot write files, run commands, or spawn
+subagents**:
 
 ```env
-CLAUDE_JEV_AGENT_TOOLS="Read Glob Grep"   # widen deliberately
+CLAUDE_JEV_AGENT_DENY="Write Edit NotebookEdit Bash PowerShell KillShell Task"
+CLAUDE_JEV_AGENT_TOOLS="Read Glob Grep"
 CLAUDE_JEV_AGENT_CWD=/path/to/project     # default: where claude-jev started
-CLAUDE_JEV_AGENT_PERMISSION=acceptEdits
 CLAUDE_JEV_CHAT=agent|api|off             # default: agent when `claude` is on PATH
 ```
 
-Adding `Bash` or `Edit` to that list lets a web page run commands and change
-files. Do it only if that is what you want.
+The denylist is the boundary that matters. `--allowed-tools` **grants**
+permissions, it does not confine them: with an allowlist of `Read Glob Grep`
+the agent could still call `Write` and create a file. `--disallowed-tools`
+refuses outright — "Write is disabled for this session, in subagents as well as
+here" — which is why the default is expressed as a denylist.
+
+To let the agent write or run commands, set `CLAUDE_JEV_AGENT_DENY=""` (or
+narrow it) and add the tools to `CLAUDE_JEV_AGENT_TOOLS`. Do that only if you
+accept that a page in your browser can then change files and run commands. When
+a tool is blocked, the chat says which one and how to enable it, rather than
+leaving the agent claiming it is waiting for a permission you cannot grant.
 
 With `ANTHROPIC_API_KEY` set and no `claude` on PATH, chat falls back to calling
 the API directly. Either way the proxy is required — without it a turn would be
