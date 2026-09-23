@@ -98,12 +98,37 @@ claude-jev dashboard    # opens browser to http://127.0.0.1:3579
 ```
 
 Features:
+- **Chat** — talk to Claude in the browser; each turn is routed by Jev and shows its tier
 - **Summary cards** — You Saved / Actual Spend / Opus 4.6 Would Be
 - **Claude usage gauges** — 5-hour session cap and weekly cap with reset countdowns
 - **Savings over time** — progress bars for today / 7 days / 30 days
 - **Routing breakdown** — per-tier request counts, tokens, costs, and savings
 - **Recent requests** — last 15 requests with tier badges and per-request savings
 - **Auto-refreshes every 5 seconds**
+
+### Chat
+
+The dashboard has a chat panel. Each turn goes through Jev and the proxy exactly
+like a Claude Code turn, so it is routed to a tier and shows up in the savings
+figures. The tier and confidence are shown above each reply.
+
+It needs an Anthropic API key, which is separate from a Claude Pro/Max
+subscription — Claude Code's subscription login cannot be reused here:
+
+```env
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+Without one, the panel explains what is missing instead of failing. Chat is also
+disabled under `claude-jev dashboard`, which runs without a proxy.
+
+### Dashboard security
+
+The dashboard binds to `127.0.0.1` only, sends no CORS headers, rejects any
+request whose `Host` is not loopback (which defeats DNS rebinding), and requires
+a per-process token that is embedded in the page when it is served. The token
+matters because `/api/chat` spends money: without it, any page open in your
+browser could post to the local port.
 
 ## Configuration
 
@@ -146,7 +171,7 @@ Logs every routing decision, Jev response time, confidence, and token usage to s
 
 ## How credentials are handled
 
-Your Anthropic credentials are never read, stored, or logged. The proxy forwards the `authorization` header verbatim. The only data sent to Jev is the text of the user's latest turn for classification. The proxy listens on `127.0.0.1` only.
+Your Claude Code credentials are never read, stored, or logged. The proxy forwards the `authorization` header verbatim and keeps no copy — which is also why the dashboard chat cannot reuse them and needs its own `ANTHROPIC_API_KEY`. The only data sent to Jev is the text of the user's latest turn for classification. The proxy listens on `127.0.0.1` only.
 
 ## Project structure
 
@@ -161,6 +186,7 @@ src/dashboard.mjs       Terminal savings renderer
 src/usage-state.mjs     In-memory Claude usage cap state
 src/web-server.mjs      Dashboard HTTP server
 src/web-dashboard.html  Web dashboard UI
+src/chat.mjs            Dashboard chat: tier selection + session history
 src/env.mjs             ~/.claude-jev.env loader (handles UTF-16)
 test/unit/              Offline unit suite (npm test)
 test/routing/           Routing accuracy cases + runner (npm run test:routing)

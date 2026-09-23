@@ -3,453 +3,513 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>claude-jev · savings dashboard</title>
+<title>claude-jev</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%E2%9A%A1%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@400;500;700&family=Caveat:wght@500;700&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --bg: #0C1118;
-    --surface: #151B26;
-    --border: #1E2736;
-    --text: #C9D1D9;
-    --text-dim: #6B7685;
-    --cyan: #00D4FF;
-    --green: #00F0B5;
-    --yellow: #FFD866;
-    --magenta: #D2A8FF;
-    --red: #FF6B6B;
-    --haiku: #00F0B5;
-    --sonnet: #FFD866;
-    --opus: #D2A8FF;
-  }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
-    background: var(--bg);
-    color: var(--text);
-    min-height: 100vh;
-    padding: 2rem;
-  }
-  .container { max-width: 960px; margin: 0 auto; }
+:root {
+  --bg:      #0a0c0b;
+  --surface: #151817;
+  --paper:   #f0eee9;
+  --ink:     #1a1d1c;
+  --clay:    #d4a373;
+  --sage:    #8ca391;
+  --shell:   64px;
+  --line:    rgba(255, 255, 255, 0.05);
+}
+@media (max-width: 1100px) { :root { --shell: 40px; } }
+@media (max-width: 680px)  { :root { --shell: 20px; } }
 
-  /* Header */
-  .header {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 2rem;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid var(--border);
-  }
-  .header h1 {
-    font-size: 1.4rem;
-    font-weight: 600;
-    color: var(--cyan);
-  }
-  .header h1 span { color: var(--text); font-weight: 400; }
-  .header .subtitle { color: var(--text-dim); font-size: 0.8rem; }
-  .live-dot {
-    width: 8px; height: 8px; border-radius: 50%;
-    background: var(--green);
-    animation: pulse 2s ease-in-out infinite;
-  }
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.3; }
-  }
+*, *::before, *::after { box-sizing: border-box; }
 
-  /* Summary cards */
-  .cards {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1rem;
-    margin-bottom: 2rem;
-  }
-  .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 1.2rem;
-  }
-  .card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
-  .card .value { font-size: 1.8rem; font-weight: 700; margin-top: 0.3rem; }
-  .card .detail { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.3rem; }
-  .card.saved .value { color: var(--green); }
-  .card.actual .value { color: var(--cyan); }
-  .card.baseline .value { color: var(--text-dim); text-decoration: line-through; }
+body {
+  margin: 0;
+  background-color: var(--bg);
+  color: var(--paper);
+  font-family: Inter, system-ui, sans-serif;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  background-image: radial-gradient(rgba(212, 163, 115, 0.08) 1px, transparent 1px);
+  background-size: 34px 34px;
+}
 
-  /* Time windows */
-  .windows { margin-bottom: 2rem; }
-  .windows h2 { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em; }
-  .window-row {
-    display: grid;
-    grid-template-columns: 110px 1fr auto;
-    align-items: center;
-    gap: 1rem;
-    padding: 0.6rem 0;
-    border-bottom: 1px solid var(--border);
-  }
-  .window-label { font-size: 0.85rem; color: var(--text-dim); }
-  .bar-track {
-    height: 28px;
-    background: #1A2233;
-    border-radius: 4px;
-    overflow: hidden;
-    position: relative;
-  }
-  .bar-fill {
-    height: 100%;
-    border-radius: 4px;
-    transition: width 0.8s ease;
-    position: relative;
-  }
-  .bar-fill::after {
-    content: attr(data-pct);
-    position: absolute;
-    right: 8px;
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--bg);
-  }
-  .bar-fill.low::after { color: var(--text); right: -40px; }
-  .window-stats { font-size: 0.75rem; color: var(--text-dim); text-align: right; white-space: nowrap; }
-  .window-stats .saved-amt { color: var(--green); font-weight: 600; }
+/* Film grain, fixed over everything. */
+.grain {
+  position: fixed; inset: 0; z-index: 1; opacity: 0.04; pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
 
-  /* Tier breakdown */
-  .tiers { margin-bottom: 2rem; }
-  .tiers h2 { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em; }
-  .tier-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1rem;
-  }
-  .tier-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 1.2rem;
-    border-top: 3px solid var(--border);
-  }
-  .tier-card.haiku  { border-top-color: var(--haiku); }
-  .tier-card.sonnet { border-top-color: var(--sonnet); }
-  .tier-card.opus   { border-top-color: var(--opus); }
-  .tier-name { font-size: 1rem; font-weight: 600; margin-bottom: 0.6rem; }
-  .tier-card.haiku  .tier-name { color: var(--haiku); }
-  .tier-card.sonnet .tier-name { color: var(--sonnet); }
-  .tier-card.opus   .tier-name { color: var(--opus); }
-  .tier-stat { display: flex; justify-content: space-between; font-size: 0.8rem; padding: 0.25rem 0; }
-  .tier-stat .k { color: var(--text-dim); }
-  .tier-stat .v { color: var(--text); }
-  .tier-stat .v.green { color: var(--green); }
+h1, h2, h3, p { margin: 0; }
+a { color: var(--clay); text-decoration: none; }
 
-  /* Recent activity */
-  .recent { margin-bottom: 2rem; }
-  .recent h2 { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em; }
-  .recent-table { width: 100%; font-size: 0.8rem; border-collapse: collapse; }
-  .recent-table th {
-    text-align: left; color: var(--text-dim); font-weight: 500;
-    padding: 0.5rem 0.8rem; border-bottom: 1px solid var(--border);
-    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em;
-  }
-  .recent-table td { padding: 0.5rem 0.8rem; border-bottom: 1px solid var(--border); }
-  .tier-badge {
-    display: inline-block; padding: 0.15rem 0.5rem; border-radius: 3px;
-    font-size: 0.7rem; font-weight: 600;
-  }
-  .tier-badge.haiku  { background: rgba(0,240,181,0.15); color: var(--haiku); }
-  .tier-badge.sonnet { background: rgba(255,216,102,0.15); color: var(--sonnet); }
-  .tier-badge.opus   { background: rgba(210,168,255,0.15); color: var(--opus); }
-  .empty-state {
-    text-align: center; padding: 3rem; color: var(--text-dim);
-    background: var(--surface); border-radius: 8px; border: 1px solid var(--border);
-  }
-  .empty-state .icon { font-size: 2rem; margin-bottom: 0.5rem; }
+.eyebrow {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.28em;
+  text-transform: uppercase; color: rgba(140, 163, 145, 0.7);
+}
+.hand { font-family: Caveat, cursive; color: var(--clay); font-weight: 700; }
+.serif { font-family: Newsreader, serif; }
+.num { font-family: Newsreader, serif; font-weight: 700; letter-spacing: -0.035em; line-height: 1; }
 
-  /* Footer */
-  .footer {
-    padding-top: 1rem;
-    border-top: 1px solid var(--border);
-    font-size: 0.7rem;
-    color: var(--text-dim);
-    display: flex;
-    justify-content: space-between;
-  }
+/* ── Shell ── */
+.wrap { position: relative; z-index: 2; max-width: 1480px; margin: 0 auto; padding: 0 var(--shell) 96px; }
 
-  /* Usage gauges */
-  .usage { margin-bottom: 2rem; }
-  .usage h2 { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em; }
-  .usage-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-  .gauge-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 1.4rem;
-  }
-  .gauge-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    margin-bottom: 0.8rem;
-  }
-  .gauge-title { font-size: 0.9rem; font-weight: 600; }
-  .gauge-pct { font-size: 1.6rem; font-weight: 700; }
-  .gauge-pct.ok { color: var(--green); }
-  .gauge-pct.warn { color: var(--yellow); }
-  .gauge-pct.crit { color: var(--red); }
-  .gauge-track {
-    height: 10px;
-    background: #1A2233;
-    border-radius: 5px;
-    overflow: hidden;
-    margin-bottom: 0.6rem;
-  }
-  .gauge-fill {
-    height: 100%;
-    border-radius: 5px;
-    transition: width 0.8s ease;
-  }
-  .gauge-fill.ok { background: linear-gradient(90deg, #00F0B5, #00D4FF); }
-  .gauge-fill.warn { background: linear-gradient(90deg, #FFD866, #FFA500); }
-  .gauge-fill.crit { background: linear-gradient(90deg, #FF6B6B, #FF3333); }
-  .gauge-meta { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-dim); }
-  .gauge-meta .reset-time { color: var(--cyan); }
-  .usage-note {
-    text-align: center;
-    padding: 1.5rem;
-    color: var(--text-dim);
-    font-size: 0.8rem;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    grid-column: 1 / -1;
-  }
+header {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 32px; flex-wrap: wrap; padding: 56px 0 40px;
+}
+header h1 {
+  font-family: Newsreader, serif; font-weight: 700; color: #fff;
+  font-size: clamp(38px, 5vw, 66px); line-height: 0.9; letter-spacing: -0.045em;
+}
+header .hand { font-size: 26px; display: block; margin-bottom: 6px; }
+.status { display: flex; align-items: center; gap: 10px; font-size: 12px; color: rgba(240,238,233,0.4); }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--sage); box-shadow: 0 0 12px var(--sage); }
+.dot.stale { background: #b4553f; box-shadow: none; }
+
+/* ── Layout ── */
+.columns { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 40px; align-items: start; }
+@media (max-width: 1180px) { .columns { grid-template-columns: minmax(0, 1fr); } }
+
+section { margin-bottom: 44px; }
+.section-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 22px; flex-wrap: wrap; }
+.section-head h2 {
+  font-family: Newsreader, serif; font-weight: 700; color: #fff;
+  font-size: clamp(26px, 3vw, 36px); line-height: 1; letter-spacing: -0.035em;
+}
+
+/* ── Cards ── */
+.card {
+  background: var(--surface); border: 1px solid var(--line);
+  box-shadow: 0 40px 70px -30px rgba(0, 0, 0, 0.7);
+  padding: 30px 30px 28px;
+}
+.summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+@media (max-width: 860px) { .summary { grid-template-columns: 1fr; } }
+.summary .card:nth-child(1) { border-radius: 76px 24px 76px 24px; transform: rotate(-1.1deg); }
+.summary .card:nth-child(2) { border-radius: 24px 76px 24px 76px; transform: rotate(0.8deg); margin-top: 20px; }
+.summary .card:nth-child(3) { border-radius: 76px 76px 24px 76px; transform: rotate(-0.5deg); }
+@media (max-width: 860px) { .summary .card { transform: none !important; margin-top: 0 !important; } }
+
+.summary .kicker { color: rgba(140,163,145,0.7); margin-bottom: 12px; }
+.summary .value { font-size: clamp(34px, 4vw, 52px); color: #fff; }
+.summary .value.saved { color: var(--clay); }
+.summary .detail { font-size: 13px; color: rgba(240,238,233,0.42); margin-top: 10px; }
+
+.panel { border-radius: 48px 20px 48px 20px; }
+.panel.alt { border-radius: 20px 48px 20px 48px; }
+
+/* ── Bars ── */
+.row { display: grid; grid-template-columns: 96px 1fr auto; gap: 16px; align-items: center; padding: 13px 0; border-bottom: 1px solid var(--line); }
+.row:last-child { border-bottom: 0; }
+.row .label { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(240,238,233,0.45); }
+.track { height: 7px; border-radius: 100px; background: rgba(255,255,255,0.05); overflow: hidden; }
+.fill { height: 100%; border-radius: 100px; background: var(--clay); transition: width 0.5s ease; }
+.fill.sage { background: var(--sage); }
+.fill.hot { background: #b4553f; }
+.row .amt { font-size: 13px; color: rgba(240,238,233,0.75); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.row .amt b { color: var(--clay); font-weight: 700; }
+
+/* ── Tiers ── */
+.tiers { display: grid; gap: 14px; }
+.tier-row { display: grid; grid-template-columns: 90px 1fr auto; gap: 16px; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.tier-row:last-child { border-bottom: 0; }
+.badge {
+  display: inline-block; padding: 5px 13px; border-radius: 100px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase;
+}
+.badge.haiku  { background: rgba(140,163,145,0.16); color: var(--sage); }
+.badge.sonnet { background: rgba(212,163,115,0.16); color: var(--clay); }
+.badge.opus   { background: rgba(180,85,63,0.18);  color: #d98b72; }
+.badge.unknown{ background: rgba(255,255,255,0.07); color: rgba(240,238,233,0.5); }
+.tier-row .meta { font-size: 12.5px; color: rgba(240,238,233,0.42); }
+.tier-row .money { text-align: right; font-size: 13px; color: rgba(240,238,233,0.75); font-variant-numeric: tabular-nums; }
+.tier-row .money b { display: block; color: var(--clay); font-family: Newsreader, serif; font-size: 19px; }
+
+/* ── Table ── */
+table { width: 100%; border-collapse: collapse; }
+th {
+  text-align: left; font-size: 10px; font-weight: 700; letter-spacing: 0.18em;
+  text-transform: uppercase; color: rgba(240,238,233,0.3);
+  padding: 0 0 12px; border-bottom: 1px solid var(--line);
+}
+td { padding: 11px 0; border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 13px; color: rgba(240,238,233,0.68); font-variant-numeric: tabular-nums; }
+tr:last-child td { border-bottom: 0; }
+td.right, th.right { text-align: right; }
+.empty { padding: 40px 0; text-align: center; color: rgba(240,238,233,0.3); font-size: 14px; }
+.empty .serif { display: block; font-size: 22px; color: rgba(240,238,233,0.5); margin-bottom: 6px; }
+
+/* ── Chat ── */
+.chat { position: sticky; top: 28px; display: flex; flex-direction: column; border-radius: 56px 20px 56px 20px; padding: 0; overflow: hidden; max-height: calc(100vh - 56px); }
+@media (max-width: 1180px) { .chat { position: static; max-height: 720px; } }
+.chat-head { padding: 26px 30px 18px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.chat-head h3 { font-family: Newsreader, serif; font-weight: 600; font-size: 23px; color: var(--paper); }
+.chat-head .hand { font-size: 17px; }
+.icon-btn { background: none; border: 0; color: rgba(240,238,233,0.3); cursor: pointer; font-size: 11px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; font-family: inherit; padding: 6px; }
+.icon-btn:hover { color: var(--clay); }
+
+.log { flex: 1; overflow-y: auto; padding: 22px 30px; display: flex; flex-direction: column; gap: 18px; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.12) transparent; }
+.log::-webkit-scrollbar { width: 7px; }
+.log::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 100px; }
+
+.msg { display: flex; flex-direction: column; gap: 7px; max-width: 92%; }
+.msg.me { align-self: flex-end; align-items: flex-end; }
+.msg .who { font-size: 10px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: rgba(240,238,233,0.28); }
+.bubble { padding: 13px 17px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.msg.me .bubble { background: var(--clay); color: var(--ink); border-radius: 20px 20px 4px 20px; font-weight: 500; }
+.msg.bot .bubble { background: rgba(255,255,255,0.04); border: 1px solid var(--line); color: rgba(240,238,233,0.88); border-radius: 20px 20px 20px 4px; }
+.msg.bot .bubble.err { border-color: rgba(180,85,63,0.4); color: #d98b72; }
+.routed { display: flex; align-items: center; gap: 8px; font-size: 11px; color: rgba(240,238,233,0.3); }
+.caret::after { content: "▍"; animation: blink 1s steps(2) infinite; color: var(--clay); }
+@keyframes blink { 50% { opacity: 0; } }
+
+.composer { border-top: 1px solid var(--line); padding: 16px 20px 18px 30px; display: flex; gap: 12px; align-items: flex-end; }
+textarea {
+  flex: 1; background: none; border: 0; resize: none; color: var(--paper);
+  font-family: inherit; font-size: 14px; line-height: 1.55; max-height: 160px; padding: 9px 0;
+}
+textarea:focus { outline: none; }
+textarea::placeholder { color: rgba(240,238,233,0.25); }
+.send {
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 100px; padding: 13px 22px; cursor: pointer;
+  background: var(--clay); color: var(--ink);
+  font-family: inherit; font-size: 10px; font-weight: 700; letter-spacing: 0.24em; text-transform: uppercase;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.send:hover:not(:disabled) { background: #fff; transform: scale(1.03); }
+.send:active:not(:disabled) { transform: scale(0.97); }
+.send:disabled { opacity: 0.35; cursor: not-allowed; }
+.notice { padding: 20px 30px; font-size: 13px; line-height: 1.6; color: rgba(240,238,233,0.45); border-top: 1px solid var(--line); }
+.notice code { color: var(--clay); font-size: 12px; }
+
+footer { padding-top: 12px; font-size: 12px; color: rgba(240,238,233,0.22); display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 </style>
 </head>
 <body>
-<div class="container">
-  <div class="header">
-    <div class="live-dot"></div>
+<div class="grain"></div>
+<div class="wrap">
+
+  <header>
     <div>
-      <h1>⚡ claude-jev <span>savings</span></h1>
-      <div class="subtitle">vs always running on Opus 4.6 · auto-refreshes every 5s</div>
+      <span class="hand">routing, quietly</span>
+      <h1>claude&#8209;jev</h1>
     </div>
+    <div class="status"><span class="dot" id="dot"></span><span id="status">connecting</span></div>
+  </header>
+
+  <div class="columns">
+    <div>
+      <section>
+        <div class="summary">
+          <div class="card">
+            <p class="eyebrow kicker">You saved</p>
+            <p class="num value saved" id="saved">$0.00</p>
+            <p class="detail" id="savedPct">&mdash;</p>
+          </div>
+          <div class="card">
+            <p class="eyebrow kicker">Actual spend</p>
+            <p class="num value" id="spend">$0.00</p>
+            <p class="detail" id="spendDetail">&mdash;</p>
+          </div>
+          <div class="card">
+            <p class="eyebrow kicker">Baseline would be</p>
+            <p class="num value" id="base">$0.00</p>
+            <p class="detail" id="baseDetail">&mdash;</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="capsSection" hidden>
+        <div class="section-head"><h2>Usage caps</h2><span class="eyebrow">subscription</span></div>
+        <div class="card panel" id="caps"></div>
+      </section>
+
+      <section>
+        <div class="section-head"><h2>Savings over time</h2></div>
+        <div class="card panel alt" id="windows"></div>
+      </section>
+
+      <section>
+        <div class="section-head"><h2>Where the work went</h2><span class="eyebrow">by tier</span></div>
+        <div class="card panel"><div class="tiers" id="tiers"></div></div>
+      </section>
+
+      <section>
+        <div class="section-head"><h2>Recent</h2><span class="eyebrow">last 15</span></div>
+        <div class="card panel alt" id="recent"></div>
+      </section>
+    </div>
+
+    <aside>
+      <div class="card chat">
+        <div class="chat-head">
+          <div>
+            <span class="hand">talk to it</span>
+            <h3>Chat</h3>
+          </div>
+          <button class="icon-btn" id="clear" title="Clear conversation">Clear</button>
+        </div>
+        <div class="log" id="log"></div>
+        <div id="composerWrap">
+          <div class="composer">
+            <textarea id="input" rows="1" placeholder="Ask something&hellip;"></textarea>
+            <button class="send" id="send">Send</button>
+          </div>
+        </div>
+        <div class="notice" id="chatNotice" hidden></div>
+      </div>
+    </aside>
   </div>
 
-  <div class="cards" id="cards"></div>
-  <div class="usage" id="usage"></div>
-  <div class="windows" id="windows"></div>
-  <div class="tiers" id="tiers"></div>
-  <div class="recent" id="recent"></div>
-
-  <div class="footer">
-    <span id="footer-info"></span>
-    <span id="footer-time"></span>
-  </div>
+  <footer>
+    <span>Every turn priced against <span id="baselineName">the baseline model</span>.</span>
+    <span id="updated"></span>
+  </footer>
 </div>
 
 <script>
-function fmt$(n) {
-  return n < 0.01 && n > 0 ? `$${n.toFixed(4)}` : `$${n.toFixed(2)}`;
-}
-function fmtTokens(n) {
-  if (n >= 1e6) return `${(n/1e6).toFixed(1)}M`;
-  if (n >= 1e3) return `${(n/1e3).toFixed(1)}k`;
+const TOKEN = "__JEV_TOKEN__";
+const api = (p) => p + (p.includes("?") ? "&" : "?") + "t=" + encodeURIComponent(TOKEN);
+
+const $ = (id) => document.getElementById(id);
+const money = (n) => "$" + (Number(n) || 0).toFixed(2);
+const tokens = (n) => {
+  n = Number(n) || 0;
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + "k";
   return String(n);
-}
-function fmtPct(part, whole) {
-  if (whole === 0) return '0%';
-  return `${((part/whole)*100).toFixed(1)}%`;
-}
-function fmtTime(ts) {
-  const d = new Date(ts);
-  const now = new Date();
-  const diff = now - d;
-  if (diff < 60000) return 'just now';
-  if (diff < 3600000) return `${Math.floor(diff/60000)}m ago`;
-  if (diff < 86400000) return `${Math.floor(diff/3600000)}h ago`;
-  return d.toLocaleDateString();
-}
+};
+const pct = (part, whole) => (whole > 0 ? (part / whole) * 100 : 0);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const tierClass = (t) => (["haiku", "sonnet", "opus"].includes(t) ? t : "unknown");
 
-function renderCards(month) {
-  const saved = month.baselineCost - month.cost;
-  return `
-    <div class="card saved">
-      <div class="label">You saved</div>
-      <div class="value">${fmt$(saved)}</div>
-      <div class="detail">${fmtPct(saved, month.baselineCost)} less than Opus 4.6</div>
-    </div>
-    <div class="card actual">
-      <div class="label">Actual spend</div>
-      <div class="value">${fmt$(month.cost)}</div>
-      <div class="detail">${fmtTokens(month.inputTokens + month.outputTokens)} tokens · ${month.requests} reqs</div>
-    </div>
-    <div class="card baseline">
-      <div class="label">Opus 4.6 would be</div>
-      <div class="value">${fmt$(month.baselineCost)}</div>
-      <div class="detail">${fmtTokens(month.inputTokens)} in / ${fmtTokens(month.outputTokens)} out</div>
-    </div>
-  `;
-}
-
-function renderWindow(label, bucket) {
-  const saved = bucket.baselineCost - bucket.cost;
-  const pct = bucket.baselineCost > 0 ? (saved / bucket.baselineCost) * 100 : 0;
-  const width = Math.max(0, Math.min(100, pct));
-  const low = width < 15;
-  const gradient = width > 50
-    ? 'linear-gradient(90deg, #00F0B5, #00D4FF)'
-    : 'linear-gradient(90deg, #00F0B5, #00F0B5)';
-  return `
-    <div class="window-row">
-      <div class="window-label">${label}</div>
-      <div class="bar-track">
-        <div class="bar-fill ${low ? 'low' : ''}" style="width:${width}%;background:${gradient}" data-pct="${pct.toFixed(1)}%"></div>
-      </div>
-      <div class="window-stats">
-        <span class="saved-amt">${fmt$(saved)}</span> · ${fmtTokens(bucket.inputTokens + bucket.outputTokens)} · ${bucket.requests} reqs
-      </div>
-    </div>
-  `;
-}
-
-function renderTiers(byTier) {
-  const order = ['haiku', 'sonnet', 'opus'];
-  let html = '<h2>Routing breakdown</h2><div class="tier-grid">';
-  for (const tier of order) {
-    const b = byTier[tier] || { requests: 0, inputTokens: 0, outputTokens: 0, cost: 0, baselineCost: 0 };
-    const saved = b.baselineCost - b.cost;
-    const tokens = b.inputTokens + b.outputTokens;
-    const pctReqs = byTier._totalReqs > 0 ? ((b.requests / byTier._totalReqs) * 100).toFixed(0) : 0;
-    html += `
-      <div class="tier-card ${tier}">
-        <div class="tier-name">${tier}</div>
-        <div class="tier-stat"><span class="k">Requests</span><span class="v">${b.requests} (${pctReqs}%)</span></div>
-        <div class="tier-stat"><span class="k">Tokens</span><span class="v">${fmtTokens(tokens)}</span></div>
-        <div class="tier-stat"><span class="k">Actual cost</span><span class="v">${fmt$(b.cost)}</span></div>
-        <div class="tier-stat"><span class="k">Saved</span><span class="v green">${fmt$(saved)}</span></div>
-      </div>
-    `;
-  }
-  html += '</div>';
-  return html;
-}
-
-function renderRecent(events) {
-  if (!events.length) {
-    return `
-      <div class="empty-state">
-        <div class="icon">⚡</div>
-        <div>No usage data yet. Start a session with <strong>claude-jev</strong></div>
-      </div>
-    `;
-  }
-  const recent = events.slice(-15).reverse();
-  let html = '<h2>Recent requests</h2><table class="recent-table"><thead><tr>';
-  html += '<th>When</th><th>Tier</th><th>Tokens</th><th>Actual</th><th>Opus cost</th><th>Saved</th>';
-  html += '</tr></thead><tbody>';
-  for (const ev of recent) {
-    const saved = (ev.baselineCost || 0) - (ev.cost || 0);
-    const tokens = (ev.inputTokens || 0) + (ev.outputTokens || 0);
-    html += `<tr>
-      <td>${fmtTime(ev.ts)}</td>
-      <td><span class="tier-badge ${ev.tier || ''}">${ev.tier || '?'}</span></td>
-      <td>${fmtTokens(tokens)}</td>
-      <td>${fmt$(ev.cost || 0)}</td>
-      <td style="color:var(--text-dim)">${fmt$(ev.baselineCost || 0)}</td>
-      <td style="color:var(--green)">${fmt$(saved)}</td>
-    </tr>`;
-  }
-  html += '</tbody></table>';
-  return html;
-}
-
-function renderUsage(usage) {
-  if (!usage || (usage.fiveHour.utilization === null && usage.sevenDay.utilization === null)) {
-    return `
-      <h2>Claude usage</h2>
-      <div class="usage-grid">
-        <div class="usage-note">
-          ⏳ Waiting for first API response to capture usage caps...<br>
-          <small>Usage data appears after your first prompt in a claude-jev session.</small>
-        </div>
-      </div>
-    `;
-  }
-
-  function gauge(title, utilization, resetAt, windowLabel) {
-    const pct = Math.min(100, (utilization ?? 0) * 100);
-    const level = pct >= 90 ? 'crit' : pct >= 70 ? 'warn' : 'ok';
-    const remaining = pct >= 100 ? 0 : (100 - pct);
-
-    let resetStr = '';
-    if (resetAt) {
-      const resetDate = new Date(resetAt * 1000);
-      const now = new Date();
-      const diffMs = resetDate - now;
-      if (diffMs > 0) {
-        const hrs = Math.floor(diffMs / 3600000);
-        const mins = Math.floor((diffMs % 3600000) / 60000);
-        if (hrs > 24) {
-          const days = Math.floor(hrs / 24);
-          const remHrs = hrs % 24;
-          resetStr = days + 'd ' + remHrs + 'h';
-        } else if (hrs > 0) {
-          resetStr = hrs + 'h ' + mins + 'm';
-        } else {
-          resetStr = mins + 'm';
-        }
-      } else {
-        resetStr = 'resetting...';
-      }
-    }
-
-    return '<div class="gauge-card">'
-      + '<div class="gauge-header">'
-      + '<div class="gauge-title">' + title + '</div>'
-      + '<div class="gauge-pct ' + level + '">' + pct.toFixed(1) + '%</div>'
-      + '</div>'
-      + '<div class="gauge-track">'
-      + '<div class="gauge-fill ' + level + '" style="width:' + pct + '%"></div>'
-      + '</div>'
-      + '<div class="gauge-meta">'
-      + '<span>' + remaining.toFixed(1) + '% remaining</span>'
-      + (resetStr ? '<span class="reset-time">Resets in ' + resetStr + '</span>' : '')
-      + '</div>'
-      + '</div>';
-  }
-
-  let html = '<h2>Claude usage</h2><div class="usage-grid">';
-  html += gauge('Session (5-hour window)', usage.fiveHour.utilization, usage.fiveHour.resetAt, '5h');
-  html += gauge('Weekly cap', usage.sevenDay.utilization, usage.sevenDay.resetAt, '7d');
-  html += '</div>';
-  return html;
-}
+// ── Metrics ────────────────────────────────────────────────────────────────
+let chatReady = false;
 
 async function refresh() {
+  let data;
   try {
-    const res = await fetch('/api/savings');
-    const data = await res.json();
-    const { today, week, month, byTier } = data.aggregated;
-    byTier._totalReqs = month.requests;
+    const r = await fetch(api("/api/savings"));
+    if (!r.ok) throw new Error(r.status);
+    data = await r.json();
+  } catch {
+    $("dot").classList.add("stale");
+    $("status").textContent = "disconnected";
+    return;
+  }
+  $("dot").classList.remove("stale");
+  $("status").textContent = "live";
+  $("updated").textContent = "updated " + new Date().toLocaleTimeString();
 
-    document.getElementById('cards').innerHTML = renderCards(month);
-    document.getElementById('usage').innerHTML = renderUsage(data.usage);
+  if (data.chatReady !== chatReady) { chatReady = data.chatReady; paintChatState(); }
 
-    document.getElementById('windows').innerHTML =
-      '<h2>Savings over time</h2>' +
-      renderWindow('Today', today) +
-      renderWindow('Last 7 days', week) +
-      renderWindow('Last 30 days', month);
+  const { month, today, week, byTier } = data.aggregated;
+  const saved = month.baselineCost - month.cost;
 
-    document.getElementById('tiers').innerHTML = renderTiers(byTier);
-    document.getElementById('recent').innerHTML = renderRecent(data.events);
-    document.getElementById('footer-info').textContent = `${data.events.length} events in ledger`;
-    document.getElementById('footer-time').textContent = `Updated ${new Date().toLocaleTimeString()}`;
-  } catch (e) {
-    console.error('Refresh failed:', e);
+  $("saved").textContent = money(saved);
+  $("savedPct").textContent = pct(saved, month.baselineCost).toFixed(1) + "% less, 30 days";
+  $("spend").textContent = money(month.cost);
+  $("spendDetail").textContent =
+    tokens(month.inputTokens + month.outputTokens) + " tokens · " + month.requests + " requests";
+  $("base").textContent = money(month.baselineCost);
+  $("baseDetail").textContent =
+    tokens(month.inputTokens) + " in · " + tokens(month.outputTokens) + " out";
+
+  paintWindows({ Today: today, "7 days": week, "30 days": month });
+  paintCaps(data.usage);
+  paintTiers(byTier);
+  paintRecent(data.events);
+}
+
+function paintWindows(buckets) {
+  $("windows").innerHTML = Object.entries(buckets).map(([name, b]) => {
+    const saved = b.baselineCost - b.cost;
+    const p = pct(saved, b.baselineCost);
+    return `<div class="row">
+      <span class="label">${esc(name)}</span>
+      <span class="track"><span class="fill" style="width:${Math.max(0, Math.min(100, p)).toFixed(1)}%"></span></span>
+      <span class="amt"><b>${money(saved)}</b> saved &middot; ${p.toFixed(0)}% &middot; ${b.requests} req</span>
+    </div>`;
+  }).join("");
+}
+
+function paintCaps(usage) {
+  const rows = [["5-hour", usage?.fiveHour], ["Weekly", usage?.sevenDay]]
+    .filter(([, v]) => v && v.utilization != null);
+  if (!rows.length) { $("capsSection").hidden = true; return; }
+  $("capsSection").hidden = false;
+  $("caps").innerHTML = rows.map(([name, v]) => {
+    const p = Math.max(0, Math.min(100, v.utilization * 100));
+    const cls = p >= 85 ? "hot" : p >= 60 ? "" : "sage";
+    const reset = v.resetAt ? "resets " + new Date(v.resetAt * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
+    return `<div class="row">
+      <span class="label">${esc(name)}</span>
+      <span class="track"><span class="fill ${cls}" style="width:${p.toFixed(1)}%"></span></span>
+      <span class="amt">${p.toFixed(0)}% &middot; ${esc(reset)}</span>
+    </div>`;
+  }).join("");
+}
+
+function paintTiers(byTier) {
+  const names = ["haiku", "sonnet", "opus", ...Object.keys(byTier || {}).filter((t) => !["haiku", "sonnet", "opus"].includes(t))];
+  const rows = names.filter((t) => byTier && byTier[t]).map((t) => {
+    const b = byTier[t];
+    const saved = b.baselineCost - b.cost;
+    return `<div class="tier-row">
+      <span><span class="badge ${tierClass(t)}">${esc(t)}</span></span>
+      <span class="meta">${b.requests} request${b.requests === 1 ? "" : "s"} &middot; ${tokens(b.inputTokens + b.outputTokens)} tokens</span>
+      <span class="money"><b>${money(saved)}</b>actual ${money(b.cost)}</span>
+    </div>`;
+  });
+  $("tiers").innerHTML = rows.length ? rows.join("")
+    : `<p class="empty"><span class="serif">Nothing routed yet.</span>Start a session and this fills in.</p>`;
+}
+
+function paintRecent(events) {
+  const rows = (events || []).slice(-15).reverse();
+  if (!rows.length) {
+    $("recent").innerHTML = `<p class="empty"><span class="serif">No requests recorded.</span>The ledger is empty.</p>`;
+    return;
+  }
+  $("recent").innerHTML = `<table><thead><tr>
+      <th>When</th><th>Tier</th><th class="right">Tokens</th>
+      <th class="right">Actual</th><th class="right">Saved</th>
+    </tr></thead><tbody>` +
+    rows.map((e) => {
+      const saved = (e.baselineCost || 0) - (e.cost || 0);
+      const cached = e.cacheReadTokens ? ` <span style="opacity:.45">(${tokens(e.cacheReadTokens)} cached)</span>` : "";
+      return `<tr>
+        <td>${new Date(e.ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</td>
+        <td><span class="badge ${tierClass(e.tier)}">${esc(e.tier || "?")}</span></td>
+        <td class="right">${tokens((e.inputTokens || 0) + (e.outputTokens || 0))}${cached}</td>
+        <td class="right">${money(e.cost)}</td>
+        <td class="right" style="color:var(--clay)">${money(saved)}</td>
+      </tr>`;
+    }).join("") + "</tbody></table>";
+}
+
+// ── Chat ───────────────────────────────────────────────────────────────────
+const chatId = "dash-" + Math.random().toString(36).slice(2, 10);
+let streaming = false;
+
+function paintChatState() {
+  $("composerWrap").hidden = !chatReady;
+  $("chatNotice").hidden = chatReady;
+  if (!chatReady) {
+    $("chatNotice").innerHTML =
+      "Chat needs an Anthropic key. Add <code>ANTHROPIC_API_KEY=sk-&hellip;</code> to " +
+      "<code>~/.claude-jev.env</code> and restart. Replies route through Jev like any other turn, " +
+      "so they show up in the numbers on the left.";
   }
 }
 
+function bubble(role, text, cls) {
+  const el = document.createElement("div");
+  el.className = "msg " + (role === "user" ? "me" : "bot");
+  el.innerHTML = `<span class="who">${role === "user" ? "you" : "claude"}</span>` +
+    `<div class="bubble ${cls || ""}"></div>`;
+  el.querySelector(".bubble").textContent = text;
+  $("log").appendChild(el);
+  $("log").scrollTop = $("log").scrollHeight;
+  return el;
+}
+
+function setStreaming(on) {
+  streaming = on;
+  $("send").disabled = on;
+  $("send").textContent = on ? "···" : "Send";
+}
+
+async function send() {
+  const text = $("input").value.trim();
+  if (!text || streaming || !chatReady) return;
+  $("input").value = "";
+  $("input").style.height = "auto";
+  bubble("user", text);
+  setStreaming(true);
+
+  const holder = bubble("assistant", "");
+  const body = holder.querySelector(".bubble");
+  body.classList.add("caret");
+  let routed = null;
+
+  try {
+    const res = await fetch(api("/api/chat"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Jev-Token": TOKEN },
+      body: JSON.stringify({ id: chatId, text }),
+    });
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      throw new Error(e.error || ("HTTP " + res.status));
+    }
+
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const frames = buf.split("\n\n");
+      buf = frames.pop() || "";
+      for (const frame of frames) {
+        const ev = /^event: (.+)$/m.exec(frame);
+        const dl = /^data: (.+)$/m.exec(frame);
+        if (!ev || !dl) continue;
+        const data = JSON.parse(dl[1]);
+        if (ev[1] === "routed") {
+          routed = data;
+          const badge = document.createElement("div");
+          badge.className = "routed";
+          const conf = data.confidence != null ? " · p=" + data.confidence.toFixed(2) : "";
+          badge.innerHTML = `<span class="badge ${tierClass(data.tier)}">${esc(data.tier)}</span>` +
+            `<span>${esc(data.model)}${conf}</span>`;
+          holder.insertBefore(badge, body);
+        } else if (ev[1] === "delta") {
+          body.textContent += data.text;
+          $("log").scrollTop = $("log").scrollHeight;
+        } else if (ev[1] === "failed") {
+          body.classList.add("err");
+          body.textContent = data.error;
+        }
+      }
+    }
+    if (!body.textContent && !body.classList.contains("err")) {
+      body.classList.add("err");
+      body.textContent = "No reply received.";
+    }
+  } catch (err) {
+    body.classList.add("err");
+    body.textContent = err.message;
+  } finally {
+    body.classList.remove("caret");
+    setStreaming(false);
+    refresh();          // the turn just cost money — show it
+  }
+}
+
+$("send").addEventListener("click", send);
+$("input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+});
+$("input").addEventListener("input", (e) => {
+  e.target.style.height = "auto";
+  e.target.style.height = Math.min(160, e.target.scrollHeight) + "px";
+});
+$("clear").addEventListener("click", async () => {
+  if (streaming) return;
+  $("log").innerHTML = "";
+  await fetch(api("/api/chat/reset"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Jev-Token": TOKEN },
+    body: JSON.stringify({ id: chatId }),
+  }).catch(() => {});
+});
+
+paintChatState();
 refresh();
 setInterval(refresh, 5000);
 </script>

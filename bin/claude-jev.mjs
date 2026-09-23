@@ -49,6 +49,8 @@ if (subcommand === "savings") {
 }
 if (subcommand === "dashboard") {
   const { startDashboardServer } = await import("../src/web-server.mjs");
+  // Standalone dashboard: no proxy, so the chat panel stays disabled and
+  // explains why. Metrics read straight from the ledger.
   const { port, url } = await startDashboardServer(3579);
   process.stdout.write(`\n  \x1b[36m⚡ claude-jev dashboard\x1b[0m → ${url}\n\n`);
   // Open in default browser
@@ -118,7 +120,7 @@ if (jevKey) {
   // Start web dashboard alongside the proxy
   let dashUrl = "";
   try {
-    const dash = await startDashboardServer(3579);
+    const dash = await startDashboardServer(3579, { proxyPort: port });
     dashUrl = dash.url;
     // Write URL to a known file so the user can always find it
     const dashFile = join(homedir(), ".claude-jev", "dashboard.url");
