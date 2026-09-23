@@ -127,6 +127,9 @@ if (jevKey) {
   try {
     mkdirSync(dirname(settingsFile), { recursive: true });
     const settings = {
+      // A user settings `env` block (e.g. another local proxy) overrides the
+      // process env var and would bypass us; --settings outranks it.
+      env: { ANTHROPIC_BASE_URL: env.ANTHROPIC_BASE_URL },
       modelPicker: {
         options: [
           {
