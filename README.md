@@ -229,6 +229,22 @@ Claude Code needs to know the context window and capabilities behind the `jev-au
 CLAUDE_JEV_BEHAVES_AS=claude-sonnet-5
 ```
 
+### Other variables
+
+| Variable | Purpose |
+|---|---|
+| `ANTHROPIC_AUTH_TOKEN` | Accepted instead of `ANTHROPIC_API_KEY` for the direct API chat backend |
+| `CLAUDE_JEV_AGENT_PERMISSION` | Overrides the agent's `--permission-mode` (default `acceptEdits`) |
+| `CLAUDE_JEV_LEDGER_PATH` | Moves `usage.jsonl` elsewhere — useful to keep test runs off your real ledger |
+
+### Files written
+
+| Path | Contents |
+|---|---|
+| `~/.claude-jev/usage.jsonl` | The usage ledger, 30-day retention |
+| `~/.claude-jev/dashboard.url` | The dashboard URL, since the startup banner scrolls away |
+| `~/.claude-jev/debug.log` | Only with `JEV_DEBUG=1` — see Known issues before enabling |
+
 ### Debug mode
 
 ```bash
@@ -333,9 +349,113 @@ standalone but starts no proxy, so chat is unavailable there by design.
 events are costed when recorded, so old rows keep whatever rates were in force
 and the dashboard blends them with current ones.
 
-## How credentials are handled
+## Local API
 
-Your Claude Code credentials are never read, stored, or logged. The proxy forwards the `authorization` header verbatim and keeps no copy — which is also why the dashboard chat cannot reuse them and needs its own `ANTHROPIC_API_KEY`. The only data sent to Jev is the text of the user's latest turn for classification. The proxy listens on `127.0.0.1` only.
+The dashboard server exposes a small HTTP API on the same port. It exists for
+the dashboard itself, but it is stable enough to script against.
+
+**Every endpoint is same-origin only.** Requests are refused unless all three
+hold:
+
+1. The `Host` header is loopback (`127.0.0.1`, `localhost` or `[::1]`) on the
+   serving port. This is what stops DNS rebinding — a hostname that resolves to
+   127.0.0.1 still fails.
+2. No CORS headers are sent at all, so a browser will not hand another origin
+   the response.
+3. `/api/*` requires a token, as `?t=<token>` or an `X-Jev-Token` header.
+
+The token is 24 random bytes, generated per process and substituted into the
+page when it is served. It is not persisted anywhere. Read it from the running
+page:
+
+```bash
+TOKEN=$(curl -s http://127.0.0.1:3579/ | grep -oP 'const TOKEN = "\K[0-9a-f]+')
+curl -s "http://127.0.0.1:3579/api/savings?t=$TOKEN" | jq .aggregated.month
+```
+
+The token matters because `/api/chat` spends money and can run tools. Without
+it, any page open in your browser could post to the local port.
+
+### Endpoints
+
+| Method | Path | Returns |
+|---|---|---|
+| `GET` | `/` | Dashboard page |
+| `GET` | `/chat` | Full-screen chat page |
+| `GET` | `/api/savings` | Ledger events, aggregates, usage caps, chat status |
+| `GET` | `/api/skills` | Slash commands for the typeahead |
+| `POST` | `/api/chat` | Runs one turn, streams SSE |
+| `POST` | `/api/chat/reset` | Clears one conversation's history |
+
+`GET /api/savings`:
+
+```jsonc
+{
+  "events": [ { "ts": 0, "tier": "haiku", "inputTokens": 0, "outputTokens": 0,
+                "cacheReadTokens": 0, "cost": 0, "baselineCost": 0 } ],
+  "aggregated": { "today": {}, "week": {}, "month": {}, "byTier": {} },
+  "usage":  { "fiveHour": { "utilization": 0.31, "resetAt": 0 }, "sevenDay": {} },
+  "chatReady": true,
+  "backend": "agent",           // or "api", or null when chat is off
+  "agent": { "tools": "Read Glob Grep", "deny": "...", "writable": false,
+             "cwd": "...", "dirs": [] }
+}
+```
+
+`POST /api/chat` takes `{ "id": "<conversation>", "text": "<message>" }` and
+replies with `text/event-stream`:
+
+| Event | Payload |
+|---|---|
+| `backend` | Which backend ran, and the agent's tools, cwd and writable roots |
+| `routed` | `tier`, `model`, and `confidence` on the API backend |
+| `tool` | Name of a tool the agent invoked |
+| `denied` | `reason` of `disabled`, `path` or `ungranted`, plus the tool or path |
+| `delta` | A chunk of reply text |
+| `done` | End of turn, with `costUsd` on the agent backend |
+| `failed` | An error; the turn is over |
+
+Status codes: `401` bad or missing token, `403` non-loopback `Host`, `400`
+empty message, `503` chat unavailable, `404` unknown `/api/` path.
+
+### Keep it local
+
+The server binds to `127.0.0.1` and nothing else. Do not port-forward it, put a
+reverse proxy in front of it, or expose 3579 through a tunnel. There is no user
+authentication — the token identifies the browser tab, not a person, and anyone
+who can reach the port and read the page can spend your quota and use whatever
+tools the agent is configured with. It is a single-user, single-machine tool by
+design.
+
+## What leaves your machine, and what doesn't
+
+**Your Claude Code credentials are never read, stored or logged.** The proxy
+forwards the `authorization` header verbatim and keeps no copy of it. The chat
+agent does not use that header at all: it spawns headless Claude Code, which
+authenticates itself, which is how a Pro/Max subscription works here without an
+API key. `ANTHROPIC_API_KEY` is only read for the fallback direct-API backend.
+
+**Prompt text goes to two places.** Every user turn is sent to TypeSafe for
+classification — that is what Jev does, and it is the whole mechanism. Turns
+also go to Anthropic, as they would without this wrapper. Chat turns take the
+same route.
+
+**`JEV_DEBUG=1` writes prompt text to disk.** The first 80 characters of every
+prompt are appended to `~/.claude-jev/debug.log`, which is never rotated or
+pruned. Enable it only while debugging, and delete the file afterwards.
+
+**The ledger holds no prompt text** — `~/.claude-jev/usage.jsonl` records
+timestamps, tiers, token counts and costs only.
+
+**Everything binds to loopback.** The proxy and the dashboard listen on
+`127.0.0.1`, and the dashboard additionally refuses non-loopback `Host` headers
+and requires a per-process token. See [Local API](#local-api) — and do not
+expose either port beyond this machine.
+
+**The chat agent can read files.** By default it can read anything under its
+working directory; with `CLAUDE_JEV_AGENT_DIRS` or a relaxed
+`CLAUDE_JEV_AGENT_DENY`, it can reach further and write. Those are your
+settings to make deliberately.
 
 ## Project structure
 
@@ -369,6 +489,39 @@ npm run test:routing      # routing accuracy against 25 labelled prompts (costs 
 The unit suite runs on `node:test` with no network. The routing suite makes one
 live Jev call per case and exits non-zero below 85% accuracy — run it when you
 change the tier guidance in `src/config.mjs`. See [`test/README.md`](test/README.md).
+
+## Known issues
+
+- **The routing banner interferes with Claude Code's display.** The proxy writes
+  the tier switch to stderr, including cursor-control sequences, while Claude
+  Code is repainting the same terminal. Lines get overwritten and the output
+  looks scrambled. The switch animation also blocks the request for ~600ms
+  before it is forwarded, on top of Jev's classification time. The banner also
+  prints more than once per chat turn.
+- **The opus tier still points at Opus 4.6.** Pricing knows Opus 5 at the same
+  rates; the tier table and the baseline comparison have not been moved, since
+  that changes which model your prompts actually run on.
+- **Debug logging records prompt text.** With `JEV_DEBUG=1`, the first 80
+  characters of every prompt go to `~/.claude-jev/debug.log`, which is never
+  rotated or pruned. Leave it off unless you are debugging, and delete the file
+  afterwards.
+- **Per-turn chat cost is not reconciled.** The ledger records what the proxy
+  observed for each request; Claude Code reports a session total that includes
+  its own overhead. The two do not match for a single chat turn. Aggregate
+  savings are unaffected.
+- **Ledger pruning assumes one session.** `prune()` runs at startup and is
+  atomic against readers, but a second `claude-jev` starting while the first is
+  writing can lose events appended in that window.
+- **Chat history is per page load.** Reloading `/chat` starts a new
+  conversation; the previous one is not resumable from the UI.
+- **Usage caps are in memory.** They are empty until the first response of a
+  session and are not persisted across restarts.
+- **Token capture needs plaintext SSE.** `accept-encoding` is stripped from
+  upstream requests so the usage parser can read the stream. If the API ever
+  requires compression, this needs a decompression step.
+- **The dashboard dies with the session.** It shares a process with the proxy.
+  `claude-jev dashboard` serves the metrics standalone, but starts no proxy, so
+  chat is unavailable there.
 
 ## Requirements
 

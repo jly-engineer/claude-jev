@@ -95,7 +95,7 @@ Default starting tier is **haiku**. Jev upgrades when needed.
 ## Known issues / things to watch
 
 - **Token capture requires plaintext SSE** — `accept-encoding` is stripped from upstream requests. If Anthropic ever requires it, this will need a decompression step.
-- **Usage gauges require subscription login** — The `anthropic-ratelimit-unified-*` headers only appear for Pro/Max subscription logins, not API key auth.
+- **Usage gauges need a subscription login and one response** — utilization now comes from Claude Code's `rate_limit_event` stream event, with the `anthropic-ratelimit-unified-*` response headers as a secondary source. Both are subscription-only; API-key auth reports no unified caps. State is in memory, so the gauges are empty until the first response of a session.
 - **Windows `.exe` preference** — `where claude` returns extensionless shell scripts first on Windows; `findClaude()` prefers `.exe` then `.cmd`.
 - **Dashboard dies with session** — The web dashboard runs in the same process as the proxy. When `claude-jev` exits, the dashboard goes down.
 
