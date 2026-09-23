@@ -118,6 +118,14 @@ Pro/Max subscription works — no API key needed.** The child authenticates
 itself; `claude-jev` never sees or stores the credential. Usage counts against
 the same 5-hour and weekly caps the gauges show.
 
+**Paste an image** into the composer, or drop one on it. Screenshots go
+straight in. The file is written to `~/.claude-jev/uploads`, which the agent is
+always granted read access to, and the path is put in the prompt so it can read
+it; the direct-API backend sends the bytes as content blocks instead. Uploads
+older than a day are pruned, PNG/JPEG/GIF/WebP only, 10MB each, and the format
+is decided by sniffing the file's own bytes rather than by what the browser
+claimed.
+
 Type `/` in the composer to autocomplete your skills and slash commands —
 user skills, project skills, plugin skills (namespaced, e.g. `caveman:caveman-help`)
 and `.claude/commands` files. Arrow keys to move, Tab or Enter to complete,
@@ -236,6 +244,7 @@ CLAUDE_JEV_BEHAVES_AS=claude-sonnet-5
 | `ANTHROPIC_AUTH_TOKEN` | Accepted instead of `ANTHROPIC_API_KEY` for the direct API chat backend |
 | `CLAUDE_JEV_AGENT_PERMISSION` | Overrides the agent's `--permission-mode` (default `acceptEdits`) |
 | `CLAUDE_JEV_LEDGER_PATH` | Moves `usage.jsonl` elsewhere — useful to keep test runs off your real ledger |
+| `CLAUDE_JEV_UPLOAD_DIR` | Moves the pasted-image directory |
 
 ### Files written
 
@@ -244,6 +253,7 @@ CLAUDE_JEV_BEHAVES_AS=claude-sonnet-5
 | `~/.claude-jev/usage.jsonl` | The usage ledger, 30-day retention |
 | `~/.claude-jev/dashboard.url` | The dashboard URL, since the startup banner scrolls away |
 | `~/.claude-jev/debug.log` | Only with `JEV_DEBUG=1` — see Known issues before enabling |
+| `~/.claude-jev/uploads/` | Images pasted into the chat, pruned after 24 hours |
 
 ### Debug mode
 
@@ -384,6 +394,7 @@ it, any page open in your browser could post to the local port.
 | `GET` | `/chat` | Full-screen chat page |
 | `GET` | `/api/savings` | Ledger events, aggregates, usage caps, chat status |
 | `GET` | `/api/skills` | Slash commands for the typeahead |
+| `POST` | `/api/upload` | Stores one pasted image, returns its path |
 | `POST` | `/api/chat` | Runs one turn, streams SSE |
 | `POST` | `/api/chat/reset` | Clears one conversation's history |
 

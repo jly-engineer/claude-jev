@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { captureFromRateLimitEvent } from "./usage-state.mjs";
 import { AUTO_MODEL } from "./config.mjs";
 import { adoptSlashCommands } from "./skills.mjs";
+import { UPLOAD_DIR } from "./uploads.mjs";
 
 /**
  * Chat backed by headless Claude Code.
@@ -41,7 +42,11 @@ export function agentConfig() {
     // Anywhere else the tool stalls waiting for a permission the browser
     // cannot grant, so extra roots have to be declared up front. Separated by
     // ";" because Windows paths contain spaces and drive colons.
-    dirs: (process.env.CLAUDE_JEV_AGENT_DIRS || "").split(";").map((d) => d.trim()).filter(Boolean),
+    dirs: [
+      // Pasted images live here, so the agent must always be able to read it.
+      UPLOAD_DIR,
+      ...(process.env.CLAUDE_JEV_AGENT_DIRS || "").split(";").map((d) => d.trim()).filter(Boolean),
+    ],
     permissionMode: process.env.CLAUDE_JEV_AGENT_PERMISSION || "acceptEdits",
   };
 }

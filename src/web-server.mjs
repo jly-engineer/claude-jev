@@ -1,5 +1,6 @@
 import http from "node:http";
 import { readFileSync } from "node:fs";
+import { extname } from "node:path";
 import { randomBytes } from "node:crypto";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,10 +10,12 @@ import { session, resetSession, planTurn, commitTurn } from "./chat.mjs";
 import { agentAvailable, newAgentSession, runAgentTurn, agentConfig } from "./agent.mjs";
 import { TIER_NAMES, tierSpec } from "./config.mjs";
 import { listSkills } from "./skills.mjs";
+import { saveImage, pruneUploads, MAX_BYTES, UPLOAD_DIR } from "./uploads.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const HTML_PATH = join(HERE, "web-dashboard.html");
 const CHAT_PATH = join(HERE, "web-chat.html");
+const MIME_BY_EXT = { ".png": "image/png", ".jpg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp" };
 
 /**
  * Per-process token, embedded in the page and required on every /api call.
@@ -127,6 +130,35 @@ export async function startDashboardServer(preferredPort = 0, opts = {}) {
       return;
     }
 
+    if (url.pathname === "/api/upload" && req.method === "POST") {
+      // Raw bytes, not JSON: base64 in a JSON envelope inflates by a third and
+      // the readJson limit is sized for messages, not screenshots.
+      const chunks = [];
+      let size = 0;
+      let tooBig = false;
+      req.on("data", (c) => {
+        size += c.length;
+        if (size > MAX_BYTES) { tooBig = true; req.destroy(); return; }
+        chunks.push(c);
+      });
+      req.on("end", () => {
+        if (tooBig) {
+          res.writeHead(413, { "Content-Type": "application/json" }).end(JSON.stringify({ error: "image too large" }));
+          return;
+        }
+        try {
+          const saved = saveImage(Buffer.concat(chunks));
+          pruneUploads();
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ path: saved.path, name: saved.name, mime: saved.mime, bytes: saved.bytes }));
+        } catch (err) {
+          res.writeHead(400, { "Content-Type": "application/json" }).end(JSON.stringify({ error: err.message }));
+        }
+      });
+      req.on("error", () => { /* client went away */ });
+      return;
+    }
+
     if (url.pathname === "/api/chat/reset" && req.method === "POST") {
       const { id = "default" } = await readJson(req).catch(() => ({}));
       resetSession(id);
@@ -186,7 +218,12 @@ async function handleChat(req, res, { proxyPort, backend, settingsFile }) {
 
   const text = String(payload.text ?? "").trim();
   const id = String(payload.id ?? "default");
-  if (!text) {
+  // Paths returned by /api/upload. Never trusted as paths — only ones we
+  // wrote ourselves, under the uploads directory, are honoured.
+  const images = Array.isArray(payload.images)
+    ? payload.images.filter((f) => typeof f === "string" && f.startsWith(UPLOAD_DIR)).slice(0, 8)
+    : [];
+  if (!text && images.length === 0) {
     res.writeHead(400, { "Content-Type": "application/json" }).end(JSON.stringify({ error: "empty message" }));
     return;
   }
@@ -207,8 +244,8 @@ data: ${JSON.stringify(data)}
 
 `);
 
-  if (backend === "agent") await agentChat({ res, send, id, text, proxyPort, settingsFile });
-  else await apiChat({ res, send, id, text, proxyPort });
+  if (backend === "agent") await agentChat({ res, send, id, text, images, proxyPort, settingsFile });
+  else await apiChat({ res, send, id, text, images, proxyPort });
 }
 
 /**
@@ -217,7 +254,7 @@ data: ${JSON.stringify(data)}
  * happens inside the proxy off the normal sentinel, because a real Claude Code
  * request carries tools and so survives extractPrompt().
  */
-async function agentChat({ res, send, id, text, proxyPort, settingsFile }) {
+async function agentChat({ res, send, id, text, images, proxyPort, settingsFile }) {
   const s = session(id);
   s.agentSession ??= newAgentSession();
 
@@ -226,8 +263,20 @@ async function agentChat({ res, send, id, text, proxyPort, settingsFile }) {
 
   let announced = false;
   try {
+    // The child takes a text prompt, so an image reaches it as a path it can
+    // Read — the uploads directory is always in its --add-dir.
+    // Must be an instruction, not a label. A bare "[image: <path>]" prefix
+    // left the model answering from the filename alone — it described an
+    // image it had never opened, with no tool call and no error. Naming the
+    // Read tool explicitly is what actually makes it look.
+    const prompt = images.length
+      ? `Use the Read tool on ${images.length === 1 ? "this image file" : "each of these image files"}:\n` +
+        images.map((f) => `- ${f}`).join("\n") +
+        `\n\nThen answer, based only on what the ${images.length === 1 ? "image" : "images"} actually shows: ` +
+        (text || "describe it.")
+      : text;
     await runAgentTurn(
-      { prompt: text, sessionId: s.agentSession, started: s.agentStarted, proxyPort, settingsFile },
+      { prompt, sessionId: s.agentSession, started: s.agentStarted, proxyPort, settingsFile },
       (ev) => {
         if (ev.kind === "routed") {
           if (announced) return;          // one badge per turn
@@ -249,11 +298,17 @@ async function agentChat({ res, send, id, text, proxyPort, settingsFile }) {
 
 /** Direct API call with an API key. Tier chosen here, since a toolless
  *  request would otherwise never be routed by the proxy. */
-async function apiChat({ res, send, id, text, proxyPort }) {
+async function apiChat({ res, send, id, text, images, proxyPort }) {
   const s = session(id);
   let plan;
   try {
-    plan = await planTurn(s, text);
+    // The direct-API backend has no filesystem on the far end, so the saved
+    // files are read back and sent as base64 content blocks.
+    const inline = images.map((f) => ({
+      mime: MIME_BY_EXT[extname(f).toLowerCase()] || "image/png",
+      data: readFileSync(f).toString("base64"),
+    }));
+    plan = await planTurn(s, text, inline);
   } catch (err) {
     send("failed", { error: err.message });
     res.end();

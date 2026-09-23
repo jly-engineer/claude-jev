@@ -41,14 +41,27 @@ export function resetSession(id) {
  * Pick a tier for this prompt and build the upstream request body.
  * Returns { body, tier, previous, confidence, reason, ms }.
  */
-export async function planTurn(s, text) {
+export async function planTurn(s, text, images = []) {
   const previous = s.tier;
-  const jev = await askJev(text);
+  // Route on the text. An image carries no prompt for Jev to judge, so a
+  // bare paste routes as if the caption were the whole request.
+  const jev = await askJev(text || "Describe the attached image.");
   const { tier, reason } = decide({ jev, current: s.tier });
   s.tier = tier;
 
   const spec = tierSpec(tier);
-  const messages = [...s.messages, { role: "user", content: text }].slice(-MAX_TURNS);
+  // This backend talks to the API directly, so images go as real content
+  // blocks rather than as paths — there is no filesystem on the far end.
+  const content = images.length
+    ? [
+        ...images.map((img) => ({
+          type: "image",
+          source: { type: "base64", media_type: img.mime, data: img.data },
+        })),
+        { type: "text", text: text || "Describe this image." },
+      ]
+    : text;
+  const messages = [...s.messages, { role: "user", content }].slice(-MAX_TURNS);
 
   const body = {
     model: spec.id,
