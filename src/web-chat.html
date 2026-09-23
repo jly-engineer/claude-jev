@@ -264,7 +264,13 @@ async function send() {
           // is "pending your permission" and there is nothing to click.
           const warn = document.createElement("div");
           warn.className = "denied";
-          warn.innerHTML = data.reason === "path"
+          warn.innerHTML = data.reason === "ungranted"
+            // The tool is not denied, just not granted. It belongs in the
+            // allowlist; the denylist has nothing to do with it.
+            ? `<b>${esc(data.name || "That tool")}</b> is not in the chat agent's tool list, so the turn ` +
+              `stalled waiting for an approval this page cannot give. Add it to ` +
+              `<code>CLAUDE_JEV_AGENT_TOOLS</code> (space-separated) and restart claude-jev.`
+            : data.reason === "path"
             // The tool is allowed; the location is not. Edits auto-approve only
             // inside the working directory, and a browser cannot approve more.
             ? `Outside the agent's working directory, so the write stalled waiting for a ` +

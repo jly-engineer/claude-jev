@@ -69,6 +69,37 @@ export const agentAvailable = () => Boolean(findClaude());
 export const newAgentSession = () => randomUUID();
 
 /**
+ * Classify a failed tool_result into *why* the agent was blocked.
+ *
+ * Three states, three different remedies, and Claude Code words each one
+ * differently — so the matching lives in one place and is tested:
+ *
+ *   disabled   on --disallowed-tools        fix: CLAUDE_JEV_AGENT_DENY
+ *   path       allowed tool, cwd-external   fix: CLAUDE_JEV_AGENT_DIRS
+ *   ungranted  not in --allowed-tools       fix: CLAUDE_JEV_AGENT_TOOLS
+ *
+ * Returns null for an ordinary tool failure. Getting this wrong is not
+ * cosmetic: an unrecognised denial leaves the agent insisting it is waiting
+ * for a permission the browser has no way to grant.
+ */
+export function detectDenial(body) {
+  if (typeof body !== "string" || !body) return null;
+
+  const off = /No such tool available: (\w+)|(\w+) is disabled for this session/.exec(body);
+  if (off) return { reason: "disabled", name: off[1] || off[2] };
+
+  // "...requested permissions to write to <path>, but you haven't granted..."
+  const scope = /requested permissions? to \w+ to (.+?), but you haven't granted/.exec(body);
+  if (scope) return { reason: "path", path: scope[1] };
+
+  // "...requested permissions to use <Tool>, but you haven't granted..."
+  const ungranted = /requested permissions? to use (\w+)/.exec(body);
+  if (ungranted) return { reason: "ungranted", name: ungranted[1] };
+
+  return null;
+}
+
+/**
  * Build the CLI arguments for one turn. Exported so the safety flags can be
  * asserted without spawning anything.
  */
@@ -120,6 +151,7 @@ export function runAgentTurn({ prompt, sessionId, started, proxyPort, settingsFi
     let costUsd = null;
     let resolvedSession = sessionId;
     let stderr = "";
+    const seenDenials = new Set();
 
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
@@ -169,19 +201,25 @@ export function runAgentTurn({ prompt, sessionId, started, proxyPort, settingsFi
         for (const block of evt.message.content) {
           if (block?.type !== "tool_result" || !block.is_error) continue;
           const body = typeof block.content === "string" ? block.content : JSON.stringify(block.content ?? "");
-          const off = /No such tool available: (\w+)|(\w+) is disabled for this session/.exec(body);
-          if (off) { onEvent({ kind: "denied", reason: "disabled", name: off[1] || off[2] }); continue; }
-
-          // "Claude requested permissions to write to <path>, but you haven't
-          // granted it yet." The tool is allowed; the path is out of scope.
-          // Headless has no approval channel, so this would otherwise stall
-          // with the agent claiming it is waiting on the user.
-          const scope = /requested permissions? to \w+ to (.+?), but you haven't granted/.exec(body);
-          if (scope) onEvent({ kind: "denied", reason: "path", path: scope[1] });
+          if (block.tool_use_id) seenDenials.add(block.tool_use_id);
+          const denial = detectDenial(body);
+          if (denial) onEvent({ kind: "denied", ...denial });
         }
         return;
       }
-      // The final line carries cost and stop_reason but has no `type`.
+      // The final line carries cost and stop_reason but has no `type`. It also
+      // carries permission_denials as structured data — more dependable than
+      // matching prose, and a backstop if the wording ever changes.
+      if (Array.isArray(evt.permission_denials)) {
+        for (const d of evt.permission_denials) {
+          if (!d?.tool_name || seenDenials.has(d.tool_use_id)) continue;
+          seenDenials.add(d.tool_use_id);
+          const path = d.tool_input?.file_path;
+          onEvent(path
+            ? { kind: "denied", reason: "path", path, name: d.tool_name }
+            : { kind: "denied", reason: "ungranted", name: d.tool_name });
+        }
+      }
       if (typeof evt.total_cost_usd === "number") costUsd = evt.total_cost_usd;
       if (evt.type === "result" && evt.is_error) {
         onEvent({ kind: "failed", error: String(evt.result ?? "agent error") });

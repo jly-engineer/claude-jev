@@ -147,6 +147,29 @@ the agent could still call `Write` and create a file. `--disallowed-tools`
 refuses outright — "Write is disabled for this session, in subagents as well as
 here" — which is why the default is expressed as a denylist.
 
+There are three separate ways a turn can be blocked, each with its own fix:
+
+| Symptom in chat | Cause | Fix |
+|---|---|---|
+| "*X* is disabled" | Tool is on the denylist | `CLAUDE_JEV_AGENT_DENY` |
+| "Outside the agent's working directory" | Allowed tool, path outside the cwd | `CLAUDE_JEV_AGENT_DIRS` |
+| "*X* is not in the chat agent's tool list" | Tool not granted | `CLAUDE_JEV_AGENT_TOOLS` |
+
+The third catches people out: `Read Glob Grep` is a deliberately small default,
+so web access, notebooks and anything else are simply absent. Web search is a
+common addition:
+
+```env
+CLAUDE_JEV_AGENT_TOOLS=Read Glob Grep WebSearch WebFetch
+```
+
+`acceptEdits` auto-approves edits under the working directory, which is why
+`Write` and `Edit` work there without being listed — but only there.
+
+In every case the chat says which of the three it was and which variable to
+change, rather than leaving the agent claiming it awaits a permission the
+browser cannot give.
+
 There is a second limit that is easy to mistake for a bug. `acceptEdits` only
 auto-approves edits **inside the working directory**. Anywhere else the tool
 comes back with "Claude requested permissions to write to ..., but you haven't
