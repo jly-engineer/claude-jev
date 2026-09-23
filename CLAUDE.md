@@ -65,11 +65,12 @@ Default starting tier is **haiku**. Jev upgrades when needed.
 | `src/ledger.mjs` | Append-only JSONL ledger at `~/.claude-jev/usage.jsonl`, read/aggregate/reset |
 | `src/dashboard.mjs` | Terminal savings renderer (headroom-style bars) |
 | `src/usage-state.mjs` | In-memory state for `anthropic-ratelimit-unified-*` headers |
-| `src/web-server.mjs` | Dashboard HTTP server: HTML, `/api/savings`, `/api/chat` SSE, Host+token guard |
+| `src/web-server.mjs` | HTTP server: `/`, `/chat`, `/api/savings`, `/api/chat` SSE, Host+token guard |
 | `src/chat.mjs` | Direct-API chat backend: per-session history, tier selection, request shaping |
 | `src/agent.mjs` | Headless Claude Code chat backend: spawn, stream-json parsing, tool allowlist |
 | `src/env.mjs` | `~/.claude-jev.env` loader, shared by the launcher and the routing tests |
-| `src/web-dashboard.html` | Single-page dashboard: metrics, usage gauges, recent requests, chat panel |
+| `src/web-dashboard.html` | Dashboard: metrics, usage gauges, recent requests. Links to `/chat` |
+| `src/web-chat.html` | Full-screen chat page served at `/chat` |
 
 ## Environment variables
 

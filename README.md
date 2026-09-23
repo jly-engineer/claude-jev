@@ -98,7 +98,7 @@ claude-jev dashboard    # opens browser to http://127.0.0.1:3579
 ```
 
 Features:
-- **Chat** — a real Claude Code agent in the browser, routed by Jev, works on a Pro subscription
+- **Chat** — a full-screen Claude Code agent at `/chat`, routed by Jev, works on a Pro subscription
 - **Summary cards** — You Saved / Actual Spend / Opus 4.6 Would Be
 - **Claude usage gauges** — 5-hour session cap and weekly cap with reset countdowns
 - **Savings over time** — progress bars for today / 7 days / 30 days
@@ -108,7 +108,7 @@ Features:
 
 ### Chat
 
-The dashboard has a chat panel that drives **headless Claude Code**: each turn
+Chat lives on its own full-screen page at **http://127.0.0.1:3579/chat** (linked from the dashboard header). It drives **headless Claude Code**: each turn
 spawns `claude -p` with `ANTHROPIC_BASE_URL` pointed at the proxy and the
 `jev-auto` sentinel as the model. So the turn is routed by Jev, lands in the
 ledger, and moves the savings figures on the same page.
@@ -200,7 +200,8 @@ src/ledger.mjs          Append-only JSONL usage ledger
 src/dashboard.mjs       Terminal savings renderer
 src/usage-state.mjs     In-memory Claude usage cap state
 src/web-server.mjs      Dashboard HTTP server
-src/web-dashboard.html  Web dashboard UI
+src/web-dashboard.html  Dashboard UI (metrics)
+src/web-chat.html       Full-screen chat UI (/chat)
 src/chat.mjs            Direct-API chat path (tier selection + history)
 src/agent.mjs           Headless Claude Code chat path (subscription, tools)
 src/env.mjs             ~/.claude-jev.env loader (handles UTF-16)

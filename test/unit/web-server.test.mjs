@@ -133,6 +133,33 @@ test("chat rejects an empty message before spending anything", async () => {
   assert.equal((await post(`/api/chat?t=${token}`, {})).status, 400);
 });
 
+test("/chat serves the dedicated chat page, with its own token", async () => {
+  const res = await get("/chat");
+  assert.equal(res.status, 200);
+  const html = await res.text();
+  assert.ok(!html.includes("__JEV_TOKEN__"), "placeholder must be replaced");
+  assert.match(html, /<title>[^<]*chat/i);
+  assert.ok(html.includes('id="composerWrap"'), "chat page owns the composer");
+  assert.ok(html.includes('href="/"'), "chat page links back to the dashboard");
+  assert.equal((await get("/chat/")).status, 200, "trailing slash works too");
+});
+
+test("the dashboard links to chat and no longer embeds it", async () => {
+  const html = await (await get("/")).text();
+  assert.ok(html.includes('href="/chat"'), "dashboard must link to the chat page");
+  assert.ok(!html.includes("<aside>"), "chat panel moved out of the dashboard");
+  assert.ok(!html.includes('id="composerWrap"'), "composer lives on the chat page only");
+});
+
+test("regression: progress bars are block-level", async () => {
+  // A bare inline <span> ignores width and height, so an empty .fill collapsed
+  // to zero width and no bar ever rendered — .track only looked right because
+  // a grid item gets blockified for free. Both must declare display: block.
+  const html = await (await get("/")).text();
+  assert.match(html, /\.track \{ display: block;/, ".track must be block");
+  assert.match(html, /\.fill \{ display: block;/, ".fill must be block");
+});
+
 test("unknown api routes 404 rather than falling through to the page", async () => {
   assert.equal((await get(`/api/nope?t=${token}`)).status, 404);
 });

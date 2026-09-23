@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>claude-jev &mdash; chat</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%E2%9A%A1%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@400;500;700&family=Caveat:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:      #0a0c0b;
+  --surface: #151817;
+  --paper:   #f0eee9;
+  --ink:     #1a1d1c;
+  --clay:    #d4a373;
+  --sage:    #8ca391;
+  --line:    rgba(255, 255, 255, 0.05);
+}
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; display: flex; flex-direction: column;
+  background-color: var(--bg); color: var(--paper);
+  font-family: Inter, system-ui, sans-serif; line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  background-image: radial-gradient(rgba(212, 163, 115, 0.08) 1px, transparent 1px);
+  background-size: 34px 34px;
+}
+.grain {
+  position: fixed; inset: 0; z-index: 1; opacity: 0.04; pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+h1, h2, h3, p { margin: 0; }
+a { color: var(--clay); text-decoration: none; }
+a:hover { color: var(--paper); }
+.hand { font-family: Caveat, cursive; color: var(--clay); font-weight: 700; }
+.serif { font-family: Newsreader, serif; }
+
+/* ── Top bar ── */
+header {
+  position: relative; z-index: 2; flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: space-between; gap: 24px;
+  padding: 22px clamp(20px, 5vw, 56px); border-bottom: 1px solid var(--line);
+}
+header h1 {
+  font-family: Newsreader, serif; font-weight: 700; color: #fff;
+  font-size: 28px; line-height: 1; letter-spacing: -0.035em;
+}
+header .hand { font-size: 17px; display: block; margin-bottom: 2px; }
+.meta { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.backlink, .backend {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase;
+}
+.backend { color: rgba(240,238,233,0.3); }
+.backlink { color: rgba(140,163,145,0.8); border-bottom: 1px solid rgba(140,163,145,0.3); padding-bottom: 3px; }
+.backlink:hover { color: var(--paper); border-bottom-color: var(--clay); }
+
+/* ── Log ── */
+main { position: relative; z-index: 2; flex: 1 1 auto; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.12) transparent; }
+main::-webkit-scrollbar { width: 9px; }
+main::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 100px; }
+.log { max-width: 860px; margin: 0 auto; padding: 40px clamp(20px, 5vw, 32px) 32px; display: flex; flex-direction: column; gap: 26px; }
+
+.msg { display: flex; flex-direction: column; gap: 8px; max-width: 86%; }
+.msg.me { align-self: flex-end; align-items: flex-end; }
+.msg .who { font-size: 10px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: rgba(240,238,233,0.28); }
+.bubble { padding: 15px 20px; font-size: 15px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+.msg.me .bubble { background: var(--clay); color: var(--ink); border-radius: 22px 22px 5px 22px; font-weight: 500; }
+.msg.bot .bubble { background: rgba(255,255,255,0.04); border: 1px solid var(--line); color: rgba(240,238,233,0.9); border-radius: 22px 22px 22px 5px; }
+.msg.bot .bubble.err { border-color: rgba(180,85,63,0.4); color: #d98b72; }
+.routed { display: flex; align-items: center; gap: 9px; font-size: 11px; color: rgba(240,238,233,0.3); flex-wrap: wrap; }
+.tool { font-size: 11px; color: var(--sage); opacity: 0.75; }
+.tool::before { content: "\2699  "; }
+.badge { display: inline-block; padding: 5px 13px; border-radius: 100px; font-size: 10px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; }
+.badge.haiku  { background: rgba(140,163,145,0.16); color: var(--sage); }
+.badge.sonnet { background: rgba(212,163,115,0.16); color: var(--clay); }
+.badge.opus   { background: rgba(180,85,63,0.18);  color: #d98b72; }
+.badge.unknown{ background: rgba(255,255,255,0.07); color: rgba(240,238,233,0.5); }
+.caret::after { content: "\258D"; animation: blink 1s steps(2) infinite; color: var(--clay); }
+@keyframes blink { 50% { opacity: 0; } }
+
+.welcome { text-align: center; padding: 8vh 0 0; color: rgba(240,238,233,0.32); }
+.welcome .serif { display: block; font-size: 34px; color: rgba(240,238,233,0.55); letter-spacing: -0.03em; margin-bottom: 10px; }
+.welcome code { color: var(--clay); font-size: 12.5px; }
+
+/* ── Composer ── */
+footer { position: relative; z-index: 2; flex: 0 0 auto; border-top: 1px solid var(--line); background: rgba(10,12,11,0.9); backdrop-filter: blur(8px); }
+.composer { max-width: 860px; margin: 0 auto; padding: 16px clamp(20px, 5vw, 32px) 20px; display: flex; gap: 14px; align-items: flex-end; }
+.field { flex: 1; background: var(--surface); border: 1px solid var(--line); border-radius: 26px; padding: 4px 20px; display: flex; }
+.field:focus-within { border-color: rgba(212,163,115,0.4); }
+textarea {
+  flex: 1; background: none; border: 0; resize: none; color: var(--paper);
+  font-family: inherit; font-size: 15px; line-height: 1.6; max-height: 220px; padding: 12px 0;
+}
+textarea:focus { outline: none; }
+textarea::placeholder { color: rgba(240,238,233,0.25); }
+.send {
+  display: inline-flex; align-items: center; justify-content: center; border: 0; cursor: pointer;
+  border-radius: 100px; padding: 16px 30px; background: var(--clay); color: var(--ink);
+  font-family: inherit; font-size: 10px; font-weight: 700; letter-spacing: 0.24em; text-transform: uppercase;
+  box-shadow: 0 25px 50px -12px rgba(0,0,0,0.55);
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.send:hover:not(:disabled) { background: #fff; transform: scale(1.03); }
+.send:active:not(:disabled) { transform: scale(0.97); }
+.send:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+.hint { max-width: 860px; margin: 0 auto; padding: 0 clamp(20px, 5vw, 32px) 16px; font-size: 11px; color: rgba(240,238,233,0.22); }
+.notice { max-width: 860px; margin: 0 auto; padding: 22px clamp(20px, 5vw, 32px) 26px; font-size: 13.5px; line-height: 1.65; color: rgba(240,238,233,0.45); }
+.notice code { color: var(--clay); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<div class="grain"></div>
+
+<header>
+  <div>
+    <span class="hand">talk to it</span>
+    <h1>Chat</h1>
+  </div>
+  <div class="meta">
+    <span class="backend" id="backend"></span>
+    <a class="backlink" href="/" id="back">Dashboard</a>
+    <a class="backlink" href="#" id="clear">Clear</a>
+  </div>
+</header>
+
+<main id="scroll">
+  <div class="log" id="log">
+    <div class="welcome" id="welcome">
+      <span class="serif">Ask it something.</span>
+      Routed by Jev, recorded on the dashboard.
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div id="composerWrap">
+    <div class="composer">
+      <div class="field"><textarea id="input" rows="1" placeholder="Ask something&hellip;"></textarea></div>
+      <button class="send" id="send">Send</button>
+    </div>
+    <p class="hint" id="hint"></p>
+  </div>
+  <div class="notice" id="chatNotice" hidden></div>
+</footer>
+
+<script>
+const TOKEN = "__JEV_TOKEN__";
+const api = (p) => p + (p.includes("?") ? "&" : "?") + "t=" + encodeURIComponent(TOKEN);
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const tierClass = (t) => (["haiku", "sonnet", "opus"].includes(t) ? t : "unknown");
+
+const chatId = "chat-" + Math.random().toString(36).slice(2, 10);
+let streaming = false;
+let chatReady = false;
+
+async function probe() {
+  try {
+    const r = await fetch(api("/api/savings"));
+    if (!r.ok) throw new Error(r.status);
+    const d = await r.json();
+    chatReady = Boolean(d.chatReady);
+    if (d.backend) $("backend").textContent = d.backend === "agent" ? "via claude code" : "via api";
+    if (d.agent) $("hint").textContent = "Tools: " + d.agent.tools + "  ·  " + d.agent.cwd;
+  } catch {
+    chatReady = false;
+  }
+  $("composerWrap").hidden = !chatReady;
+  $("chatNotice").hidden = chatReady;
+  if (!chatReady) {
+    $("chatNotice").innerHTML =
+      "Chat is off. It runs headless Claude Code, so it works on a Pro/Max subscription with no " +
+      "API key &mdash; but it needs <code>claude</code> on PATH and a live proxy, which " +
+      "<code>claude-jev dashboard</code> does not start. Launch <code>claude-jev</code> instead, " +
+      "or set <code>ANTHROPIC_API_KEY</code> to use the direct API path.";
+  }
+}
+
+function bubble(role, text, cls) {
+  $("welcome")?.remove();
+  const el = document.createElement("div");
+  el.className = "msg " + (role === "user" ? "me" : "bot");
+  el.innerHTML = `<span class="who">${role === "user" ? "you" : "claude"}</span><div class="bubble ${cls || ""}"></div>`;
+  el.querySelector(".bubble").textContent = text;
+  $("log").appendChild(el);
+  $("scroll").scrollTop = $("scroll").scrollHeight;
+  return el;
+}
+
+function setStreaming(on) {
+  streaming = on;
+  $("send").disabled = on;
+  $("send").textContent = on ? "···" : "Send";
+}
+
+async function send() {
+  const text = $("input").value.trim();
+  if (!text || streaming || !chatReady) return;
+  $("input").value = "";
+  $("input").style.height = "auto";
+  bubble("user", text);
+  setStreaming(true);
+
+  const holder = bubble("assistant", "");
+  const body = holder.querySelector(".bubble");
+  body.classList.add("caret");
+  const atBottom = () => $("scroll").scrollHeight - $("scroll").scrollTop - $("scroll").clientHeight < 120;
+
+  try {
+    const res = await fetch(api("/api/chat"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Jev-Token": TOKEN },
+      body: JSON.stringify({ id: chatId, text }),
+    });
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      throw new Error(e.error || ("HTTP " + res.status));
+    }
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const frames = buf.split("\n\n");
+      buf = frames.pop() || "";
+      for (const frame of frames) {
+        const ev = /^event: (.+)$/m.exec(frame);
+        const dl = /^data: (.+)$/m.exec(frame);
+        if (!ev || !dl) continue;
+        const data = JSON.parse(dl[1]);
+        const stick = atBottom();
+        if (ev[1] === "backend") {
+          $("backend").textContent = data.backend === "agent" ? "via claude code" : "via api";
+        } else if (ev[1] === "tool") {
+          const tip = document.createElement("div");
+          tip.className = "tool";
+          tip.textContent = data.name;
+          holder.insertBefore(tip, body);
+        } else if (ev[1] === "routed") {
+          const badge = document.createElement("div");
+          badge.className = "routed";
+          const conf = data.confidence != null ? " · p=" + data.confidence.toFixed(2) : "";
+          badge.innerHTML = `<span class="badge ${tierClass(data.tier)}">${esc(data.tier || "?")}</span>` +
+            `<span>${esc(data.model)}${conf}</span>`;
+          holder.insertBefore(badge, body);
+        } else if (ev[1] === "delta") {
+          body.textContent += data.text;
+        } else if (ev[1] === "failed") {
+          body.classList.add("err");
+          body.textContent = data.error;
+        }
+        if (stick) $("scroll").scrollTop = $("scroll").scrollHeight;
+      }
+    }
+    if (!body.textContent && !body.classList.contains("err")) {
+      body.classList.add("err");
+      body.textContent = "No reply received.";
+    }
+  } catch (err) {
+    body.classList.add("err");
+    body.textContent = err.message;
+  } finally {
+    body.classList.remove("caret");
+    setStreaming(false);
+  }
+}
+
+$("send").addEventListener("click", send);
+$("input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+});
+$("input").addEventListener("input", (e) => {
+  e.target.style.height = "auto";
+  e.target.style.height = Math.min(220, e.target.scrollHeight) + "px";
+});
+$("clear").addEventListener("click", async (e) => {
+  e.preventDefault();
+  if (streaming) return;
+  $("log").innerHTML = `<div class="welcome" id="welcome"><span class="serif">Ask it something.</span>Routed by Jev, recorded on the dashboard.</div>`;
+  await fetch(api("/api/chat/reset"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Jev-Token": TOKEN },
+    body: JSON.stringify({ id: chatId }),
+  }).catch(() => {});
+});
+
+probe();
+$("input").focus();
+</script>
+</body>
+</html>

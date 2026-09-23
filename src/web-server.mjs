@@ -11,6 +11,7 @@ import { TIER_NAMES, tierSpec } from "./config.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const HTML_PATH = join(HERE, "web-dashboard.html");
+const CHAT_PATH = join(HERE, "web-chat.html");
 
 /**
  * Per-process token, embedded in the page and required on every /api call.
@@ -62,6 +63,7 @@ function readJson(req, limit = 256 * 1024) {
  */
 export async function startDashboardServer(preferredPort = 0, opts = {}) {
   const template = readFileSync(HTML_PATH, "utf8");
+  const chatTemplate = readFileSync(CHAT_PATH, "utf8");
   const { proxyPort } = opts;
   let port = preferredPort;
 
@@ -135,8 +137,9 @@ export async function startDashboardServer(preferredPort = 0, opts = {}) {
       return;
     }
 
+    const page = url.pathname === "/chat" || url.pathname === "/chat/" ? chatTemplate : template;
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
-    res.end(template.replace("__JEV_TOKEN__", TOKEN));
+    res.end(page.replace("__JEV_TOKEN__", TOKEN));
   });
 
   return new Promise((resolve, reject) => {
