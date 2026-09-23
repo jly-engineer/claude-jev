@@ -160,7 +160,10 @@ td.right, th.right { text-align: right; }
 .msg.me .bubble { background: var(--clay); color: var(--ink); border-radius: 20px 20px 4px 20px; font-weight: 500; }
 .msg.bot .bubble { background: rgba(255,255,255,0.04); border: 1px solid var(--line); color: rgba(240,238,233,0.88); border-radius: 20px 20px 20px 4px; }
 .msg.bot .bubble.err { border-color: rgba(180,85,63,0.4); color: #d98b72; }
-.routed { display: flex; align-items: center; gap: 8px; font-size: 11px; color: rgba(240,238,233,0.3); }
+.routed { display: flex; align-items: center; gap: 8px; font-size: 11px; color: rgba(240,238,233,0.3); flex-wrap: wrap; }
+.tool { font-size: 11px; color: var(--sage); opacity: 0.75; }
+.tool::before { content: "99 "; }
+.backend { font-size: 10px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(240,238,233,0.3); }
 .caret::after { content: "▍"; animation: blink 1s steps(2) infinite; color: var(--clay); }
 @keyframes blink { 50% { opacity: 0; } }
 
@@ -221,7 +224,7 @@ footer { padding-top: 12px; font-size: 12px; color: rgba(240,238,233,0.22); disp
         </div>
       </section>
 
-      <section id="capsSection" hidden>
+      <section id="capsSection">
         <div class="section-head"><h2>Usage caps</h2><span class="eyebrow">subscription</span></div>
         <div class="card panel" id="caps"></div>
       </section>
@@ -248,6 +251,7 @@ footer { padding-top: 12px; font-size: 12px; color: rgba(240,238,233,0.22); disp
           <div>
             <span class="hand">talk to it</span>
             <h3>Chat</h3>
+            <span class="backend" id="backend"></span>
           </div>
           <button class="icon-btn" id="clear" title="Clear conversation">Clear</button>
         </div>
@@ -304,6 +308,9 @@ async function refresh() {
   $("updated").textContent = "updated " + new Date().toLocaleTimeString();
 
   if (data.chatReady !== chatReady) { chatReady = data.chatReady; paintChatState(); }
+  if (data.backend && !$("backend").textContent) {
+    $("backend").textContent = data.backend === "agent" ? "via claude code" : "via api";
+  }
 
   const { month, today, week, byTier } = data.aggregated;
   const saved = month.baselineCost - month.cost;
@@ -338,8 +345,16 @@ function paintWindows(buckets) {
 function paintCaps(usage) {
   const rows = [["5-hour", usage?.fiveHour], ["Weekly", usage?.sevenDay]]
     .filter(([, v]) => v && v.utilization != null);
-  if (!rows.length) { $("capsSection").hidden = true; return; }
-  $("capsSection").hidden = false;
+  if (!rows.length) {
+    // Do not hide the section: a missing gauge with no explanation reads as a
+    // bug. Utilization is in-memory and only lands once a response comes back
+    // through the proxy, so it is empty until the first request of a session.
+    $("caps").innerHTML =
+      `<p class="empty"><span class="serif">No usage data yet.</span>` +
+      `Caps appear after the first request of a session, and need a Pro/Max login &mdash; ` +
+      `an API key has no unified caps. Chat counts too.</p>`;
+    return;
+  }
   $("caps").innerHTML = rows.map(([name, v]) => {
     const p = Math.max(0, Math.min(100, v.utilization * 100));
     const cls = p >= 85 ? "hot" : p >= 60 ? "" : "sage";
@@ -399,9 +414,10 @@ function paintChatState() {
   $("chatNotice").hidden = chatReady;
   if (!chatReady) {
     $("chatNotice").innerHTML =
-      "Chat needs an Anthropic key. Add <code>ANTHROPIC_API_KEY=sk-&hellip;</code> to " +
-      "<code>~/.claude-jev.env</code> and restart. Replies route through Jev like any other turn, " +
-      "so they show up in the numbers on the left.";
+      "Chat is off. It runs headless Claude Code, so it works on a Pro/Max subscription with no " +
+      "API key &mdash; but it needs <code>claude</code> on PATH and a live proxy, which " +
+      "<code>claude-jev dashboard</code> does not start. Launch <code>claude-jev</code> instead, " +
+      "or set <code>ANTHROPIC_API_KEY</code> to use the direct API path.";
   }
 }
 
@@ -460,7 +476,14 @@ async function send() {
         const dl = /^data: (.+)$/m.exec(frame);
         if (!ev || !dl) continue;
         const data = JSON.parse(dl[1]);
-        if (ev[1] === "routed") {
+        if (ev[1] === "backend") {
+          $("backend").textContent = data.backend === "agent" ? "via claude code" : "via api";
+        } else if (ev[1] === "tool") {
+          const tip = document.createElement("div");
+          tip.className = "tool";
+          tip.textContent = data.name;
+          holder.insertBefore(tip, body);
+        } else if (ev[1] === "routed") {
           routed = data;
           const badge = document.createElement("div");
           badge.className = "routed";

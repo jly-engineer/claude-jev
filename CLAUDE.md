@@ -33,7 +33,9 @@ Proxy flow per request:
 - **No silent $0**: An unpriced model id is costed at baseline rates and the event is flagged `estimated: true`. Returning 0 for an unknown model made any `CLAUDE_JEV_*_MODEL` override look free.
 - **Conversation identity**: `conversationKey()` in `src/proxy.mjs` uses `metadata.user_id` when Claude Code sends one, else a SHA-1 of the system prompt plus the whole first message. It used to be the first 80 characters of message zero, which is identical boilerplate in every session — so all concurrent conversations shared one tier state. `touchConvo()` keeps the map to 50 entries by true LRU (re-insert on touch), so a long-running session is not evicted by fresh ones.
 - **Ledger writers**: `readEvents()` is a pure read. Compaction is `prune()`, called once from `bin/claude-jev.mjs` before the proxy starts appending, via temp file + rename. Pruning inside the read path meant the dashboard's 5-second poll rewrote the file under live appends. Still not safe to prune while another session is appending — startup is the one moment the process knows it has no writes in flight.
-- **Dashboard chat does not use the sentinel**: `src/chat.mjs` calls `askJev()` and `decide()` itself and sends a concrete model, because `extractPrompt()` ignores requests without tools — that is how the proxy tells a real turn from a tool-loop continuation, and a toolless chat request would sit on the default tier forever. The call still goes through the proxy, so chat lands in the ledger. It never requests `thinking`, which sidesteps signature binding when the tier changes between turns.
+- **Dashboard chat has two backends**: `agent` (default) spawns headless `claude -p` with `ANTHROPIC_BASE_URL` at the proxy and `ANTHROPIC_MODEL=jev-auto`, so it routes off the normal sentinel path — a real Claude Code request carries tools and survives `extractPrompt()`. The child authenticates itself, which is why a Pro/Max subscription works and we never touch the credential. `api` (`src/chat.mjs`) is the fallback for an API key; it must call `askJev()`/`decide()` itself, because a toolless request would never be routed by the proxy, and it never requests `thinking` so tier changes cannot orphan a signature. Both require the proxy: without it the turn is neither routed nor recorded, which is not claude-jev.
+- **Agent chat is a real agent**: driven from a browser page, so the default tool allowlist is read-only (`Read Glob Grep`). `CLAUDE_JEV_AGENT_TOOLS` widens it; adding `Bash` or `Edit` lets a web page run commands.
+- **Usage caps come from the stream, not headers**: headless Claude Code emits `rate_limit_event` with `rate_limit_info.unifiedWindows.{five_hour,seven_day}.{utilization,resetsAt}`. `captureFromRateLimitEvent()` ingests it. This is more reliable than the `anthropic-ratelimit-unified-*` response headers, which only appear on subscription logins and not on every response. The gauge is in-memory, so it is empty until the first response of a session — the dashboard now says that rather than hiding the section.
 - **The dashboard is same-origin only**: no CORS header, a loopback `Host` allowlist against DNS rebinding, and a per-process token substituted into the page at serve time. This got strict when `/api/chat` arrived — a wildcard CORS header on an endpoint that spends money is a different problem from one that leaks numbers.
 - **"Today" is calendar-local**: `aggregate()` cuts at local midnight. The 7- and 30-day buckets stay rolling windows, matching their labels.
 - **No accept-encoding**: The proxy strips `accept-encoding` from upstream requests so responses come back as plaintext SSE, which the token capture parser can read.
@@ -64,7 +66,8 @@ Default starting tier is **haiku**. Jev upgrades when needed.
 | `src/dashboard.mjs` | Terminal savings renderer (headroom-style bars) |
 | `src/usage-state.mjs` | In-memory state for `anthropic-ratelimit-unified-*` headers |
 | `src/web-server.mjs` | Dashboard HTTP server: HTML, `/api/savings`, `/api/chat` SSE, Host+token guard |
-| `src/chat.mjs` | Dashboard chat: per-session history, tier selection, request shaping |
+| `src/chat.mjs` | Direct-API chat backend: per-session history, tier selection, request shaping |
+| `src/agent.mjs` | Headless Claude Code chat backend: spawn, stream-json parsing, tool allowlist |
 | `src/env.mjs` | `~/.claude-jev.env` loader, shared by the launcher and the routing tests |
 | `src/web-dashboard.html` | Single-page dashboard: metrics, usage gauges, recent requests, chat panel |
 
@@ -78,7 +81,10 @@ Default starting tier is **haiku**. Jev upgrades when needed.
 | `CLAUDE_JEV_<TIER>_EFFORT` | Override a tier's effort level |
 | `CLAUDE_JEV_LEDGER_PATH` | Override ledger file location |
 | `CLAUDE_JEV_BEHAVES_AS` | Override the model the sentinel reports as (default: cheapest tier) |
-| `ANTHROPIC_API_KEY` | Enables the dashboard chat panel. Not needed for routing itself |
+| `ANTHROPIC_API_KEY` | Fallback chat backend. Not needed on a Pro/Max subscription |
+| `CLAUDE_JEV_CHAT` | `agent` (default) / `api` / `off` |
+| `CLAUDE_JEV_AGENT_TOOLS` | Agent chat tool allowlist. Default `Read Glob Grep` |
+| `CLAUDE_JEV_AGENT_CWD` | Working directory for agent chat |
 
 ## Known issues / things to watch
 

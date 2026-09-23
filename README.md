@@ -98,7 +98,7 @@ claude-jev dashboard    # opens browser to http://127.0.0.1:3579
 ```
 
 Features:
-- **Chat** — talk to Claude in the browser; each turn is routed by Jev and shows its tier
+- **Chat** — a real Claude Code agent in the browser, routed by Jev, works on a Pro subscription
 - **Summary cards** — You Saved / Actual Spend / Opus 4.6 Would Be
 - **Claude usage gauges** — 5-hour session cap and weekly cap with reset countdowns
 - **Savings over time** — progress bars for today / 7 days / 30 days
@@ -108,19 +108,34 @@ Features:
 
 ### Chat
 
-The dashboard has a chat panel. Each turn goes through Jev and the proxy exactly
-like a Claude Code turn, so it is routed to a tier and shows up in the savings
-figures. The tier and confidence are shown above each reply.
+The dashboard has a chat panel that drives **headless Claude Code**: each turn
+spawns `claude -p` with `ANTHROPIC_BASE_URL` pointed at the proxy and the
+`jev-auto` sentinel as the model. So the turn is routed by Jev, lands in the
+ledger, and moves the savings figures on the same page.
 
-It needs an Anthropic API key, which is separate from a Claude Pro/Max
-subscription — Claude Code's subscription login cannot be reused here:
+Because the thing making the request genuinely is Claude Code, **a Claude
+Pro/Max subscription works — no API key needed.** The child authenticates
+itself; `claude-jev` never sees or stores the credential. Usage counts against
+the same 5-hour and weekly caps the gauges show.
+
+It is a real agent, not a chat box, so it has tools. Since it is driven from a
+browser page the default tool set is **read-only**:
 
 ```env
-ANTHROPIC_API_KEY=sk-ant-...
+CLAUDE_JEV_AGENT_TOOLS="Read Glob Grep"   # widen deliberately
+CLAUDE_JEV_AGENT_CWD=/path/to/project     # default: where claude-jev started
+CLAUDE_JEV_AGENT_PERMISSION=acceptEdits
+CLAUDE_JEV_CHAT=agent|api|off             # default: agent when `claude` is on PATH
 ```
 
-Without one, the panel explains what is missing instead of failing. Chat is also
-disabled under `claude-jev dashboard`, which runs without a proxy.
+Adding `Bash` or `Edit` to that list lets a web page run commands and change
+files. Do it only if that is what you want.
+
+With `ANTHROPIC_API_KEY` set and no `claude` on PATH, chat falls back to calling
+the API directly. Either way the proxy is required — without it a turn would be
+neither routed nor recorded, so chat is switched off and says so rather than
+quietly not being claude-jev. That is also why chat is unavailable under
+`claude-jev dashboard`, which starts no proxy.
 
 ### Dashboard security
 
@@ -186,7 +201,8 @@ src/dashboard.mjs       Terminal savings renderer
 src/usage-state.mjs     In-memory Claude usage cap state
 src/web-server.mjs      Dashboard HTTP server
 src/web-dashboard.html  Web dashboard UI
-src/chat.mjs            Dashboard chat: tier selection + session history
+src/chat.mjs            Direct-API chat path (tier selection + history)
+src/agent.mjs           Headless Claude Code chat path (subscription, tools)
 src/env.mjs             ~/.claude-jev.env loader (handles UTF-16)
 test/unit/              Offline unit suite (npm test)
 test/routing/           Routing accuracy cases + runner (npm run test:routing)

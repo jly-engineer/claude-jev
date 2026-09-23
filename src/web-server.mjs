@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 import { readEvents, aggregate } from "./ledger.mjs";
 import { getUsageState } from "./usage-state.mjs";
 import { session, resetSession, planTurn, commitTurn } from "./chat.mjs";
+import { agentAvailable, newAgentSession, runAgentTurn, agentConfig } from "./agent.mjs";
+import { TIER_NAMES, tierSpec } from "./config.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const HTML_PATH = join(HERE, "web-dashboard.html");
@@ -63,8 +65,27 @@ export async function startDashboardServer(preferredPort = 0, opts = {}) {
   const { proxyPort } = opts;
   let port = preferredPort;
 
-  const chatReady = Boolean(proxyPort) &&
-    Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
+  // Two chat backends. "agent" spawns headless Claude Code, which
+  // authenticates itself — so a Pro/Max subscription works and we never touch
+  // the credential. "api" talks to the proxy directly and needs an API key.
+  // Agent wins when available, since it is the one that works on a
+  // subscription. Force either with CLAUDE_JEV_CHAT=agent|api|off.
+  const forced = (process.env.CLAUDE_JEV_CHAT || "").toLowerCase();
+  const hasKey = Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
+  //
+  // Both backends require the proxy. Headless Claude Code would happily run
+  // without it, but then the turn is neither routed by Jev nor recorded in
+  // the ledger — chat that silently skips the whole point of the tool and
+  // never shows up in the numbers beside it. Better to offer no chat and say
+  // why than to offer a chat that quietly is not claude-jev.
+  const backend =
+    !proxyPort || forced === "off" ? null
+    : forced === "api" ? (hasKey ? "api" : null)
+    : forced === "agent" ? (agentAvailable() ? "agent" : null)
+    : agentAvailable() ? "agent"
+    : hasKey ? "api"
+    : null;
+  const chatReady = Boolean(backend);
 
   const server = http.createServer(async (req, res) => {
     if (!hostAllowed(req, port)) {
@@ -91,6 +112,8 @@ export async function startDashboardServer(preferredPort = 0, opts = {}) {
         aggregated: aggregate(events),
         usage: getUsageState(),
         chatReady,
+        backend,
+        agent: backend === "agent" ? agentConfig() : null,
       }));
       return;
     }
@@ -103,7 +126,7 @@ export async function startDashboardServer(preferredPort = 0, opts = {}) {
     }
 
     if (url.pathname === "/api/chat" && req.method === "POST") {
-      await handleChat(req, res, { proxyPort, chatReady });
+      await handleChat(req, res, { proxyPort, backend, settingsFile: opts.settingsFile });
       return;
     }
 
@@ -139,10 +162,10 @@ export async function startDashboardServer(preferredPort = 0, opts = {}) {
 /**
  * Route one chat turn and stream the reply back as SSE.
  *
- * The upstream call goes through the local proxy, so the ledger, the savings
- * figures and the rate-limit gauges all see chat traffic too.
+ * Either backend goes through the local proxy, so the ledger, the savings
+ * figures and the usage gauges all see chat traffic too.
  */
-async function handleChat(req, res, { proxyPort, chatReady }) {
+async function handleChat(req, res, { proxyPort, backend, settingsFile }) {
   let payload;
   try {
     payload = await readJson(req);
@@ -157,19 +180,10 @@ async function handleChat(req, res, { proxyPort, chatReady }) {
     res.writeHead(400, { "Content-Type": "application/json" }).end(JSON.stringify({ error: "empty message" }));
     return;
   }
-  if (!chatReady) {
+  if (!backend) {
     res.writeHead(503, { "Content-Type": "application/json" }).end(JSON.stringify({
-      error: "Chat needs ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN) in ~/.claude-jev.env or the environment.",
+      error: "Chat is unavailable: no `claude` CLI on PATH, and no ANTHROPIC_API_KEY for the direct API path.",
     }));
-    return;
-  }
-
-  const s = session(id);
-  let plan;
-  try {
-    plan = await planTurn(s, text);
-  } catch (err) {
-    res.writeHead(502, { "Content-Type": "application/json" }).end(JSON.stringify({ error: err.message }));
     return;
   }
 
@@ -178,15 +192,66 @@ async function handleChat(req, res, { proxyPort, chatReady }) {
     "Cache-Control": "no-store",
     Connection: "keep-alive",
   });
-  const send = (event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  const send = (event, data) => res.write(`event: ${event}
+data: ${JSON.stringify(data)}
 
+`);
+
+  if (backend === "agent") await agentChat({ res, send, id, text, proxyPort, settingsFile });
+  else await apiChat({ res, send, id, text, proxyPort });
+}
+
+/**
+ * Headless Claude Code. It authenticates itself, so this is the path that
+ * works on a Pro/Max subscription — we never see the credential. Jev routing
+ * happens inside the proxy off the normal sentinel, because a real Claude Code
+ * request carries tools and so survives extractPrompt().
+ */
+async function agentChat({ res, send, id, text, proxyPort, settingsFile }) {
+  const s = session(id);
+  s.agentSession ??= newAgentSession();
+
+  send("backend", { backend: "agent", tools: agentConfig().tools, cwd: agentConfig().cwd });
+
+  let announced = false;
+  try {
+    await runAgentTurn(
+      { prompt: text, sessionId: s.agentSession, started: s.agentStarted, proxyPort, settingsFile },
+      (ev) => {
+        if (ev.kind === "routed") {
+          if (announced) return;          // one badge per turn
+          announced = true;
+          send("routed", { model: ev.model, tier: tierOf(ev.model) });
+        } else if (ev.kind === "delta") send("delta", { text: ev.text });
+        else if (ev.kind === "tool") send("tool", { name: ev.name });
+        else if (ev.kind === "failed") send("failed", { error: ev.error });
+        else if (ev.kind === "done") send("done", { costUsd: ev.costUsd });
+      },
+    );
+    s.agentStarted = true;
+  } catch (err) {
+    send("failed", { error: err.message });
+  }
+  res.end();
+}
+
+/** Direct API call with an API key. Tier chosen here, since a toolless
+ *  request would otherwise never be routed by the proxy. */
+async function apiChat({ res, send, id, text, proxyPort }) {
+  const s = session(id);
+  let plan;
+  try {
+    plan = await planTurn(s, text);
+  } catch (err) {
+    send("failed", { error: err.message });
+    res.end();
+    return;
+  }
+
+  send("backend", { backend: "api" });
   send("routed", {
-    tier: plan.tier,
-    previous: plan.previous,
-    model: plan.model,
-    confidence: plan.confidence,
-    reason: plan.reason,
-    ms: plan.ms,
+    tier: plan.tier, previous: plan.previous, model: plan.model,
+    confidence: plan.confidence, reason: plan.reason, ms: plan.ms,
   });
 
   const body = Buffer.from(JSON.stringify(plan.body));
@@ -249,4 +314,10 @@ async function handleChat(req, res, { proxyPort, chatReady }) {
     res.end();
   });
   upstream.end(body);
+}
+
+/** Map a concrete model id back to its tier name, for the badge. */
+function tierOf(modelId) {
+  for (const name of TIER_NAMES) if (tierSpec(name)?.id === modelId) return name;
+  return "unknown";
 }

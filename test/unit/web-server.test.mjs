@@ -80,13 +80,52 @@ test("only loopback Hosts are served", async () => {
   assert.equal(await rawStatus("/", `127.0.0.1:${port + 1}`), 403, "port must match too");
 });
 
-test("chat is disabled without a proxy and a key, and says why", async () => {
+test("chat is off without a proxy, whatever else is available", async () => {
+  // Headless Claude Code would run without the proxy, but the turn would be
+  // neither Jev-routed nor recorded — chat that is not actually claude-jev.
   const body = await (await get(`/api/savings?t=${token}`)).json();
   assert.equal(body.chatReady, false);
+  assert.equal(body.backend, null);
 
   const res = await post(`/api/chat?t=${token}`, { text: "hello" });
   assert.equal(res.status, 503);
-  assert.match((await res.json()).error, /ANTHROPIC_API_KEY/);
+  assert.match((await res.json()).error, /claude|ANTHROPIC_API_KEY/);
+});
+
+test("with a proxy, the agent backend is preferred over an API key", async () => {
+  // Agent is the path that works on a Pro/Max subscription, so it wins.
+  const { startDashboardServer } = await import("../../src/web-server.mjs");
+  const s = await startDashboardServer(0, { proxyPort: 9 });
+  try {
+    const html = await (await fetch(s.url + "/")).text();
+    const tk = /const TOKEN = "([0-9a-f]+)"/.exec(html)[1];
+    const body = await (await fetch(`${s.url}/api/savings?t=${tk}`)).json();
+    // The claude CLI is present in this environment; if it ever is not, the
+    // backend falls back rather than failing.
+    assert.ok(body.backend === "agent" || body.backend === null, `unexpected backend ${body.backend}`);
+    if (body.backend === "agent") {
+      assert.ok(body.agent.tools.length > 0, "agent advertises its tool allowlist");
+      assert.ok(!/Bash|Edit|Write/.test(body.agent.tools),
+        `default agent tools must stay read-only, got: ${body.agent.tools}`);
+    }
+  } finally {
+    s.close();
+  }
+});
+
+test("CLAUDE_JEV_CHAT=off disables chat even when everything is present", async () => {
+  process.env.CLAUDE_JEV_CHAT = "off";
+  try {
+    const { startDashboardServer } = await import("../../src/web-server.mjs");
+    const s = await startDashboardServer(0, { proxyPort: 9 });
+    const html = await (await fetch(s.url + "/")).text();
+    const tk = /const TOKEN = "([0-9a-f]+)"/.exec(html)[1];
+    const body = await (await fetch(`${s.url}/api/savings?t=${tk}`)).json();
+    assert.equal(body.chatReady, false);
+    s.close();
+  } finally {
+    delete process.env.CLAUDE_JEV_CHAT;
+  }
 });
 
 test("chat rejects an empty message before spending anything", async () => {

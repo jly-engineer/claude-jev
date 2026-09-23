@@ -120,7 +120,7 @@ if (jevKey) {
   // Start web dashboard alongside the proxy
   let dashUrl = "";
   try {
-    const dash = await startDashboardServer(3579, { proxyPort: port });
+    const dash = await startDashboardServer(3579, { proxyPort: port, settingsFile });
     dashUrl = dash.url;
     // Write URL to a known file so the user can always find it
     const dashFile = join(homedir(), ".claude-jev", "dashboard.url");

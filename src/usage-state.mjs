@@ -49,6 +49,34 @@ export function captureFromHeaders(headers) {
 }
 
 /**
+ * Update state from a Claude Code `rate_limit_event` stream event.
+ *
+ * Headless Claude Code reports utilization directly in its stream:
+ *
+ *   rate_limit_info.unifiedWindows.five_hour = { utilization, resetsAt }
+ *   rate_limit_info.unifiedWindows.seven_day = { utilization, resetsAt }
+ *
+ * More dependable than the response headers above, which only appear for
+ * subscription logins and not on every response. `resetsAt` is Unix seconds,
+ * matching what the header path stores.
+ */
+export function captureFromRateLimitEvent(info) {
+  const windows = info?.unifiedWindows;
+  if (!windows) return;
+
+  const apply = (target, w, status) => {
+    if (!w || typeof w.utilization !== "number") return;
+    target.utilization = w.utilization;
+    target.resetAt = typeof w.resetsAt === "number" ? w.resetsAt : null;
+    target.status = status ?? target.status ?? null;
+    state.lastUpdated = Date.now();
+  };
+
+  apply(state.fiveHour, windows.five_hour, info.status);
+  apply(state.sevenDay, windows.seven_day, info.overageStatus ?? info.status);
+}
+
+/**
  * Get current usage state for the dashboard.
  */
 export function getUsageState() {
