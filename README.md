@@ -214,6 +214,102 @@ JEV_DEBUG=1 claude-jev
 
 Logs every routing decision, Jev response time, confidence, and token usage to stderr.
 
+## Deployment
+
+### Install
+
+```bash
+git clone https://github.com/jly-engineer/claude-jev.git
+cd claude-jev
+npm install
+npm link          # puts `claude-jev` on PATH, symlinked to this checkout
+```
+
+`npm link` symlinks rather than copies, so the global command always runs this
+working tree. Pulling is the upgrade.
+
+### Upgrading
+
+```bash
+cd /path/to/claude-jev
+git pull
+npm install       # only when dependencies changed
+npm test          # 79 assertions, offline, ~300ms
+```
+
+Then **restart `claude-jev`**. Nothing is hot-reloaded:
+
+- `src/*.mjs` is cached by Node for the life of the process
+- `~/.claude-jev.env` is read once at launch into `process.env`
+- the `modelPicker` sentinel settings file is written at launch
+- the chat backend and `chatReady` are decided when the dashboard server starts
+
+A running session keeps the old behaviour entirely, including old pricing.
+
+### Configuration file
+
+Everything lives in `~/.claude-jev.env` — on Windows, `C:\Users\<you>\.claude-jev.env`.
+A complete example:
+
+```env
+JEV_API_KEY=sk-...
+CLAUDE_JEV_AGENT_DENY=Bash PowerShell KillShell Task
+CLAUDE_JEV_AGENT_DIRS=C:\Users\me\Documents\Knowledge Base;C:\Users\me\Documents\Leadership;D:\repos\work
+```
+
+**Multiple directories** go in one `CLAUDE_JEV_AGENT_DIRS` line separated by
+semicolons. Not commas, not spaces, not repeated lines — a second line with the
+same key wins and silently discards the first. Semicolons were chosen because
+Windows paths contain spaces and a drive colon. Do not quote the whole value;
+surrounding quotes are stripped from the line, not from each path. The working
+directory is always writable, so it does not need listing.
+
+> **Encoding trap.** Windows PowerShell's `Set-Content` and `>` write **UTF-16 LE**;
+> PowerShell 7 writes UTF-8. The parser reads either, but not one file containing
+> both — appending UTF-8 to a UTF-16 file corrupts it, taking your API key with it.
+> Check the first two bytes (`255 254` means UTF-16 LE) and append in kind:
+>
+> ```powershell
+> Add-Content ~\.claude-jev.env -Encoding Unicode -Value 'CLAUDE_JEV_AGENT_DIRS=C:\vault;D:\notes'
+> ```
+>
+> Or convert the file to UTF-8 once and stop worrying about it.
+
+Shell variables beat the file — the loader only fills in what is not already set,
+so `$env:CLAUDE_JEV_CHAT='off'; claude-jev` overrides for a single run.
+
+### Verifying a deployment
+
+```bash
+claude-jev savings --json      # ledger reachable, pricing sane
+npm test                       # nothing broken offline
+npm run test:routing           # routing accuracy (costs money — one Jev call per case)
+```
+
+With a session running, open the dashboard and read the composer hint under the
+chat box. It states the agent's posture (`limited` or `⚠ writable`), its tool
+list, and every directory it can write to. If that line disagrees with your env
+file, the restart did not take.
+
+### What runs where
+
+| Piece | Lifetime | Notes |
+|---|---|---|
+| Proxy | With the session | Random loopback port |
+| Dashboard | With the session | Port 3579, random fallback if taken |
+| Chat agent | Per turn | A fresh `claude -p` child per message |
+| Ledger | On disk | `~/.claude-jev/usage.jsonl`, 30-day retention, pruned at startup |
+| Usage caps | In memory | Empty until the first response of a session |
+
+The dashboard dies with the session. `claude-jev dashboard` serves the metrics
+standalone but starts no proxy, so chat is unavailable there by design.
+
+### Ledger notes
+
+`claude-jev savings --reset` clears it. Worth doing after a pricing change:
+events are costed when recorded, so old rows keep whatever rates were in force
+and the dashboard blends them with current ones.
+
 ## How credentials are handled
 
 Your Claude Code credentials are never read, stored, or logged. The proxy forwards the `authorization` header verbatim and keeps no copy — which is also why the dashboard chat cannot reuse them and needs its own `ANTHROPIC_API_KEY`. The only data sent to Jev is the text of the user's latest turn for classification. The proxy listens on `127.0.0.1` only.

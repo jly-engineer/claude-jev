@@ -99,6 +99,38 @@ Default starting tier is **haiku**. Jev upgrades when needed.
 - **Windows `.exe` preference** — `where claude` returns extensionless shell scripts first on Windows; `findClaude()` prefers `.exe` then `.cmd`.
 - **Dashboard dies with session** — The web dashboard runs in the same process as the proxy. When `claude-jev` exits, the dashboard goes down.
 
+## Deploying a change
+
+`npm link` symlinks the global `claude-jev` at this checkout, so `git pull` is
+the upgrade. Everything else needs a **restart** — nothing reloads in place:
+`src/*.mjs` is cached by Node for the process lifetime, `~/.claude-jev.env` is
+read once at launch, the sentinel settings file is written at launch, and the
+chat backend is decided when the dashboard server starts. A running session
+keeps old behaviour entirely, old pricing included.
+
+Gate a deploy on `npm test` (offline, 79 assertions). Run `npm run test:routing`
+only when the tier guidance in `src/config.mjs` or `decide()` changed — it costs
+one Jev call per case.
+
+Config lives in `~/.claude-jev.env`. Two things bite repeatedly:
+
+- **Multiple agent directories** are one `CLAUDE_JEV_AGENT_DIRS` line separated
+  by semicolons. A repeated key does not merge — the last line wins. Semicolons
+  rather than commas or spaces because Windows paths carry spaces and a drive
+  colon.
+- **Encoding.** Windows PowerShell writes UTF-16 LE, PowerShell 7 writes UTF-8.
+  The parser handles either, but a file containing both is corrupt, and the API
+  key goes with it. Append with `Add-Content -Encoding Unicode` against a UTF-16
+  file, or convert the file to UTF-8 once.
+
+After restarting, the composer hint under the chat box is the fastest check that
+config took effect: it prints the agent's posture, tool list and every writable
+directory. If it disagrees with the env file, the restart did not happen.
+
+After a pricing change, consider `claude-jev savings --reset`. Events are costed
+at record time, so old rows keep the old rates and the dashboard blends them
+with current ones.
+
 ## Testing
 
 ```bash
