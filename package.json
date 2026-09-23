@@ -7,7 +7,7 @@
     "claude-jev": "./bin/claude-jev.mjs"
   },
   "scripts": {
-    "test": "node --test \"test/unit/*.test.mjs\"",
+    "test": "node test/run.mjs",
     "test:routing": "node test/routing/run.mjs"
   },
   "dependencies": {

@@ -14,20 +14,75 @@ Everything about Claude Code is unchanged — tools, keybindings, `/compact`, `/
 
 > **Note:** `claude-jev` always launches Claude Code with `--dangerously-skip-permissions`. Tool calls run without prompting for approval. Use it only in directories and on machines where that is acceptable.
 
-## Quick start
+## Install
 
 ```bash
 git clone https://github.com/jly-engineer/claude-jev.git
 cd claude-jev
 npm install
 npm link
-
-# Set your Jev key (free from https://console.typesafe.ai/keys)
-echo "JEV_API_KEY=sk-..." > ~/.claude-jev.env
-
-# Launch
+echo "JEV_API_KEY=sk-your-key-here" > ~/.claude-jev.env
 claude-jev
 ```
+
+`npm link` symlinks rather than copies, so the command always runs this
+checkout — `git pull` is the upgrade. A free Jev key comes from
+[console.typesafe.ai/keys](https://console.typesafe.ai/keys).
+
+### Requirements
+
+- **Node.js 20 or newer.** Check with `node --version`.
+- **[Claude Code](https://code.claude.com/docs/en/setup)** on your `PATH`.
+- A Claude Pro/Max subscription or an Anthropic API key — whatever Claude Code
+  already uses. `claude-jev` never reads that credential.
+
+### Linux and macOS
+
+Everything is platform-guarded: `which` instead of `where`, no shell wrapper on
+spawn, `xdg-open`/`open` for the dashboard. Paths come from `os.homedir()`, so
+config lands in `~/.claude-jev.env` and state under `~/.claude-jev/`.
+
+Two things worth knowing:
+
+**Node version.** Ubuntu 24.04's `apt install nodejs` gives Node 18, which is
+too old. Use nvm or NodeSource:
+
+```bash
+# nvm — no sudo, and npm link then needs no sudo either
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+exec $SHELL
+nvm install --lts
+
+# or NodeSource, system-wide
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt install -y nodejs
+```
+
+**`npm link` permissions.** With a system-wide Node, npm's global prefix is
+root-owned and `npm link` needs `sudo`. Avoid that by pointing npm at your home
+directory:
+
+```bash
+npm config set prefix ~/.npm-global
+echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc && exec $SHELL
+```
+
+With nvm, neither applies.
+
+**`xdg-open`** is only used by `claude-jev dashboard` to open a browser. On a
+headless server it simply does nothing — the URL is printed, and also written
+to `~/.claude-jev/dashboard.url`.
+
+Multiple agent directories are separated by `;` on every platform, not `:` —
+see [Configuration](#configuration).
+
+### Verify
+
+```bash
+npm test                 # 103 assertions, offline, no API keys
+claude-jev savings       # reads the ledger
+```
+
 
 ## How it works
 
@@ -302,25 +357,13 @@ and an unrotated transcript of everything you typed is not a good default.
 
 ## Deployment
 
-### Install
-
-```bash
-git clone https://github.com/jly-engineer/claude-jev.git
-cd claude-jev
-npm install
-npm link          # puts `claude-jev` on PATH, symlinked to this checkout
-```
-
-`npm link` symlinks rather than copies, so the global command always runs this
-working tree. Pulling is the upgrade.
-
 ### Upgrading
 
 ```bash
 cd /path/to/claude-jev
 git pull
 npm install       # only when dependencies changed
-npm test          # 79 assertions, offline, ~300ms
+npm test          # offline unit suite
 ```
 
 Then **restart `claude-jev`**. Nothing is hot-reloaded:
@@ -525,7 +568,8 @@ src/skills.mjs          Slash-command discovery for the typeahead
 src/chat.mjs            Direct-API chat path (tier selection + history)
 src/agent.mjs           Headless Claude Code chat path (subscription, tools)
 src/env.mjs             ~/.claude-jev.env loader (handles UTF-16)
-test/unit/              Offline unit suite (npm test)
+test/run.mjs            Portable unit-suite runner (npm test)
+test/unit/              Offline unit suite
 test/routing/           Routing accuracy cases + runner (npm run test:routing)
 ```
 
@@ -559,12 +603,6 @@ change the tier guidance in `src/config.mjs`. See [`test/README.md`](test/README
 - **The dashboard dies with the session.** It shares a process with the proxy.
   `claude-jev dashboard` serves the metrics standalone, but starts no proxy, so
   chat is unavailable there.
-
-## Requirements
-
-- Node.js 20+
-- [Claude Code](https://code.claude.com/docs/en/setup) installed
-- A [TypeSafe Jev API key](https://console.typesafe.ai/keys) (free)
 
 ## License
 
