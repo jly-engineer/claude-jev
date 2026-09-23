@@ -162,6 +162,17 @@ textarea::placeholder { color: rgba(240,238,233,0.25); }
 .opt .src { font-size: 9.5px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(240,238,233,0.25); margin-left: 8px; }
 .opt .desc { font-size: 11.5px; color: rgba(240,238,233,0.38); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .menu .none { padding: 14px 20px; font-size: 12.5px; color: rgba(240,238,233,0.3); }
+
+/* Wordmark, matching joetechninja.com */
+.wordmark { display: inline-flex; align-items: baseline; gap: 6px; transition: color 0.15s ease; }
+.wordmark b {
+  font-family: Newsreader, serif; font-weight: 700; font-size: 15px;
+  letter-spacing: -0.02em; color: rgba(240, 238, 233, 0.55);
+}
+.wordmark span { font-family: Newsreader, serif; font-size: 15px; color: rgba(212, 163, 115, 0.45); }
+.wordmark:hover b { color: var(--paper); }
+.wordmark:hover span { color: var(--clay); }
+
 .hint { max-width: 860px; margin: 0 auto; padding: 0 clamp(20px, 5vw, 32px) 16px; font-size: 11px; color: rgba(240,238,233,0.22); }
 .notice { max-width: 860px; margin: 0 auto; padding: 22px clamp(20px, 5vw, 32px) 26px; font-size: 13.5px; line-height: 1.65; color: rgba(240,238,233,0.45); }
 .notice code { color: var(--clay); font-size: 12.5px; }
@@ -177,6 +188,7 @@ textarea::placeholder { color: rgba(240,238,233,0.25); }
   </div>
   <div class="meta">
     <span class="backend" id="backend"></span>
+    <a class="wordmark" href="https://joetechninja.com" target="_blank" rel="noopener" aria-label="joetechninja.com"><b>joetechninja</b><span>.com</span></a>
     <a class="backlink" href="/" id="back">Dashboard</a>
     <a class="backlink" href="#" id="clear">Clear</a>
   </div>

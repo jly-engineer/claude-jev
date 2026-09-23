@@ -2,6 +2,12 @@
   "name": "claude-jev",
   "version": "1.0.0",
   "description": "Claude Code wrapper that uses TypeSafe Jev to auto-route prompts to the best model",
+  "homepage": "https://joetechninja.com",
+  "author": "joetechninja.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jly-engineer/claude-jev.git"
+  },
   "type": "module",
   "bin": {
     "claude-jev": "./bin/claude-jev.mjs"

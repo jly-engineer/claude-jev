@@ -147,6 +147,17 @@ td.right, th.right { text-align: right; }
 .empty { padding: 40px 0; text-align: center; color: rgba(240,238,233,0.3); font-size: 14px; }
 .empty .serif { display: block; font-size: 22px; color: rgba(240,238,233,0.5); margin-bottom: 6px; }
 
+
+/* Wordmark, matching joetechninja.com */
+.wordmark { display: inline-flex; align-items: baseline; gap: 6px; transition: color 0.15s ease; }
+.wordmark b {
+  font-family: Newsreader, serif; font-weight: 700; font-size: 15px;
+  letter-spacing: -0.02em; color: rgba(240, 238, 233, 0.55);
+}
+.wordmark span { font-family: Newsreader, serif; font-size: 15px; color: rgba(212, 163, 115, 0.45); }
+.wordmark:hover b { color: var(--paper); }
+.wordmark:hover span { color: var(--clay); }
+
 footer { padding-top: 12px; font-size: 12px; color: rgba(240,238,233,0.22); display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 </style>
 </head>
@@ -211,6 +222,7 @@ footer { padding-top: 12px; font-size: 12px; color: rgba(240,238,233,0.22); disp
   </div>
 
   <footer>
+    <a class="wordmark" href="https://joetechninja.com" target="_blank" rel="noopener" aria-label="joetechninja.com"><b>joetechninja</b><span>.com</span></a>
     <span>Priced against <span id="baselineName">the baseline model</span>. &ldquo;Cached&rdquo; tokens are prefix re-reads, billed at a tenth.</span>
     <span id="updated"></span>
   </footer>

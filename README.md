@@ -2,6 +2,8 @@
 
 A wrapper for [Claude Code](https://code.claude.com) that uses [TypeSafe Jev](https://docs.typesafe.ai) to automatically route each prompt to the cheapest model that can handle it.
 
+Built by [**joetechninja**.com](https://joetechninja.com) — workflow automation and AI consulting.
+
 A typo fix goes to Haiku. A standard implementation goes to Sonnet. A hard debugging session goes to Opus. You don't pick — Jev decides in ~200ms for a fraction of a cent, and the proxy rewrites the model field before it reaches the API.
 
 ```
@@ -603,6 +605,10 @@ change the tier guidance in `src/config.mjs`. See [`test/README.md`](test/README
 - **The dashboard dies with the session.** It shares a process with the proxy.
   `claude-jev dashboard` serves the metrics standalone, but starts no proxy, so
   chat is unavailable there.
+
+---
+
+[**joetechninja**.com](https://joetechninja.com)
 
 ## License
 
