@@ -1,12 +1,36 @@
 #!/usr/bin/env node
 import { spawn, execSync } from "node:child_process";
-import { writeFileSync, mkdirSync } from "node:fs";
+import { writeFileSync, mkdirSync, readFileSync, existsSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { loadEnvFile } from "../src/env.mjs";
 import { startProxy } from "../src/proxy.mjs";
 import { AUTO_MODEL, behavesAsModel } from "../src/config.mjs";
 import { startDashboardServer } from "../src/web-server.mjs";
+
+// ── Existing status line ────────────────────────────────────────────────────
+/**
+ * Whether the user already configured a status line of their own.
+ *
+ * Our --settings file wins over the user's settings.json, so injecting a
+ * statusLine unconditionally would quietly replace theirs for the session.
+ */
+function userHasStatusLine() {
+  for (const path of [
+    join(homedir(), ".claude", "settings.json"),
+    join(process.cwd(), ".claude", "settings.json"),
+    join(process.cwd(), ".claude", "settings.local.json"),
+  ]) {
+    try {
+      if (!existsSync(path)) continue;
+      // strip a BOM: JSON.parse rejects it
+      const raw = readFileSync(path, "utf8").replace(/^﻿/, "");
+      if (JSON.parse(raw)?.statusLine) return true;
+    } catch { /* unreadable or malformed — treat as none */ }
+  }
+  return false;
+}
 
 // ── Find claude CLI ─────────────────────────────────────────────────────────
 function findClaude() {
@@ -102,7 +126,7 @@ if (jevKey) {
   const settingsFile = join(tmpdir(), "claude-jev", "settings.json");
   try {
     mkdirSync(dirname(settingsFile), { recursive: true });
-    writeFileSync(settingsFile, JSON.stringify({
+    const settings = {
       modelPicker: {
         options: [
           {
@@ -113,7 +137,23 @@ if (jevKey) {
           },
         ],
       },
-    }));
+    };
+
+    // Show the tier in Claude Code's status line — the row it owns, so
+    // nothing has to write into the terminal it is repainting.
+    //
+    // A statusLine here would replace one the user has already configured,
+    // silently. So it goes in only when there is none, unless
+    // CLAUDE_JEV_STATUSLINE says otherwise: 1 to insist, 0 to never.
+    const want = process.env.CLAUDE_JEV_STATUSLINE;
+    if (want !== "0" && (want === "1" || !userHasStatusLine())) {
+      settings.statusLine = {
+        type: "command",
+        command: `node "${join(dirname(fileURLToPath(import.meta.url)), "statusline.mjs")}"`,
+      };
+    }
+
+    writeFileSync(settingsFile, JSON.stringify(settings));
     args.push("--settings", settingsFile);
   } catch { /* non-fatal — just get the warning */ }
 

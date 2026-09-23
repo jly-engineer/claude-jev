@@ -23,7 +23,7 @@ export const CACHE_MULTIPLIERS = {
 };
 
 // The model everything is compared against — "what if you ran it all on opus?"
-export const BASELINE_MODEL = "claude-opus-4-6";
+export const BASELINE_MODEL = "claude-opus-5";
 
 /** Strip a trailing -YYYYMMDD date suffix so dated ids resolve. */
 const normalize = (modelId) => String(modelId ?? "").replace(/-\d{8}$/, "");

@@ -39,7 +39,7 @@ claude-jev
 |------|-------|------|
 | **haiku** | `claude-haiku-4-5-20251001` | Typo fixes, renames, factual lookups, mechanical edits |
 | **sonnet** | `claude-sonnet-5` | Standard implementations, test writing, known bug fixes |
-| **opus** | `claude-opus-4-6` | Unknown-cause debugging, multi-module design, security logic |
+| **opus** | `claude-opus-5` | Unknown-cause debugging, multi-module design, security logic |
 
 ### Fail-open design
 
@@ -49,21 +49,35 @@ Every error path keeps the current model:
 - Low confidence (<0.6) -> never downgrade, cap upgrades at sonnet
 - Non-routed requests (user picked a model, tool continuations) -> pass through untouched
 
-### Model switch animation
+### Status line
 
-When Jev switches tiers, you see an animated transition in the terminal:
+The routing decision appears in Claude Code's own status line:
 
 ```
-  ◐ haiku
-  ◑ ━━━╸┄┄┄┄ opus
-  ⚡ haiku -> opus (claude-opus-4-6) p=0.92
+⚡ haiku→sonnet p=0.92  ·  $5.77 saved today · 76%
 ```
 
-Color-coded: haiku = green, sonnet = yellow, opus = magenta.
+The proxy writes nothing to the terminal. It used to print an animated switch
+banner on stderr, cursor-control sequences and all, into the same terminal
+Claude Code repaints — which scrambled the display — and it blocked each
+request for ~600ms before forwarding. Both are gone. The decision is written to
+`~/.claude-jev/current.json` and rendered by `bin/statusline.mjs`, which reads
+that file plus today's ledger.
+
+**If you already have a status line, yours is kept.** `claude-jev` passes its
+own `--settings` file, which outranks `settings.json`, so injecting a
+`statusLine` unconditionally would silently replace yours for the session. It
+is added only when no status line is configured. Override either way:
+
+```env
+CLAUDE_JEV_STATUSLINE=1   # always use ours, replacing an existing one
+CLAUDE_JEV_STATUSLINE=0   # never
+```
+
 
 ## Savings dashboard
 
-Track what you're saving compared to running everything on Opus 4.6.
+Track what you're saving compared to running everything on Opus 5.
 
 ### Terminal
 
@@ -75,7 +89,7 @@ claude-jev savings --reset      # clear the ledger
 ```
 
 ```
-  ⚡ claude-jev savings  vs always using Opus 4.6
+  ⚡ claude-jev savings  vs always using Opus 5
   ─────────────────────────────────────────────────────────────────
 
   Today          ██████████████░░░░░░ 69.2% saved  66.0k tokens  $1.51 saved  (5 reqs)
@@ -116,7 +130,7 @@ claude-jev dashboard    # opens browser to http://127.0.0.1:3579
 
 Features:
 - **Chat** — a full-screen Claude Code agent at `/chat`, routed by Jev, works on a Pro subscription
-- **Summary cards** — You Saved / Actual Spend / Opus 4.6 Would Be
+- **Summary cards** — You Saved / Actual Spend / Opus 5 Would Be
 - **Claude usage gauges** — 5-hour session cap and weekly cap with reset countdowns
 - **Savings over time** — progress bars for today / 7 days / 30 days
 - **Routing breakdown** — per-tier request counts, tokens, costs, and savings
@@ -240,7 +254,7 @@ JEV_API_KEY=sk-your-key-here
 ```env
 CLAUDE_JEV_HAIKU_MODEL=claude-haiku-4-5-20251001
 CLAUDE_JEV_SONNET_MODEL=claude-sonnet-5
-CLAUDE_JEV_OPUS_MODEL=claude-opus-4-6
+CLAUDE_JEV_OPUS_MODEL=claude-opus-5
 CLAUDE_JEV_HAIKU_EFFORT=null
 CLAUDE_JEV_SONNET_EFFORT=high
 CLAUDE_JEV_OPUS_EFFORT=high
@@ -262,6 +276,8 @@ CLAUDE_JEV_BEHAVES_AS=claude-sonnet-5
 | `CLAUDE_JEV_AGENT_PERMISSION` | Overrides the agent's `--permission-mode` (default `acceptEdits`) |
 | `CLAUDE_JEV_LEDGER_PATH` | Moves `usage.jsonl` elsewhere — useful to keep test runs off your real ledger |
 | `CLAUDE_JEV_UPLOAD_DIR` | Moves the pasted-image directory |
+| `CLAUDE_JEV_STATE_PATH` | Moves the status-line state file |
+| `JEV_DEBUG_PROMPTS` | `1` also logs prompt text. Off by default |
 
 ### Files written
 
@@ -269,7 +285,8 @@ CLAUDE_JEV_BEHAVES_AS=claude-sonnet-5
 |---|---|
 | `~/.claude-jev/usage.jsonl` | The usage ledger, 30-day retention |
 | `~/.claude-jev/dashboard.url` | The dashboard URL, since the startup banner scrolls away |
-| `~/.claude-jev/debug.log` | Only with `JEV_DEBUG=1` — see Known issues before enabling |
+| `~/.claude-jev/debug.log` | Only with `JEV_DEBUG=1`. Rotated at 5MB, keeping one generation |
+| `~/.claude-jev/current.json` | The current routing decision, read by the status line |
 | `~/.claude-jev/uploads/` | Images pasted into the chat, pruned after 24 hours |
 
 ### Debug mode
@@ -278,7 +295,10 @@ CLAUDE_JEV_BEHAVES_AS=claude-sonnet-5
 JEV_DEBUG=1 claude-jev
 ```
 
-Logs every routing decision, Jev response time, confidence, and token usage to stderr.
+Logs every routing decision, Jev response time, confidence and token usage to
+`~/.claude-jev/debug.log`, rotated at 5MB. Prompt **text** is not logged unless
+you also set `JEV_DEBUG_PROMPTS=1` — debugging routing rarely needs the words,
+and an unrotated transcript of everything you typed is not a good default.
 
 ## Deployment
 
@@ -468,9 +488,11 @@ classification — that is what Jev does, and it is the whole mechanism. Turns
 also go to Anthropic, as they would without this wrapper. Chat turns take the
 same route.
 
-**`JEV_DEBUG=1` writes prompt text to disk.** The first 80 characters of every
-prompt are appended to `~/.claude-jev/debug.log`, which is never rotated or
-pruned. Enable it only while debugging, and delete the file afterwards.
+**`JEV_DEBUG=1` does not log prompt text.** It records tiers, timings and token
+counts to `~/.claude-jev/debug.log`, rotated at 5MB. Prompt text is written only
+if you also set `JEV_DEBUG_PROMPTS=1`, which is off precisely because an
+unrotated transcript of everything you typed is not something to turn on by
+accident.
 
 **The ledger holds no prompt text** — `~/.claude-jev/usage.jsonl` records
 timestamps, tiers, token counts and costs only.
@@ -520,23 +542,10 @@ change the tier guidance in `src/config.mjs`. See [`test/README.md`](test/README
 
 ## Known issues
 
-- **The routing banner interferes with Claude Code's display.** The proxy writes
-  the tier switch to stderr, including cursor-control sequences, while Claude
-  Code is repainting the same terminal. Lines get overwritten and the output
-  looks scrambled. The switch animation also blocks the request for ~600ms
-  before it is forwarded, on top of Jev's classification time. The banner also
-  prints more than once per chat turn.
-- **The opus tier still points at Opus 4.6.** Pricing knows Opus 5 at the same
-  rates; the tier table and the baseline comparison have not been moved, since
-  that changes which model your prompts actually run on.
-- **Debug logging records prompt text.** With `JEV_DEBUG=1`, the first 80
-  characters of every prompt go to `~/.claude-jev/debug.log`, which is never
-  rotated or pruned. Leave it off unless you are debugging, and delete the file
-  afterwards.
 - **Per-turn chat cost is not reconciled.** The ledger records what the proxy
-  observed for each request; Claude Code reports a session total that includes
-  its own overhead. The two do not match for a single chat turn. Aggregate
-  savings are unaffected.
+  observed for each request; Claude Code reports a session total including its
+  own overhead. The two do not match for a single chat turn. Aggregate savings
+  are unaffected.
 - **Ledger pruning assumes one session.** `prune()` runs at startup and is
   atomic against readers, but a second `claude-jev` starting while the first is
   writing can lose events appended in that window.

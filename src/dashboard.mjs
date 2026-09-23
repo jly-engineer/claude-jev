@@ -121,7 +121,7 @@ export function renderDashboard({ days = 30, json = false } = {}) {
     `  ${BOLD}Total:${RST}  ${tokens(totalTokens)} new tokens across ${month.requests} requests`,
     `  ${DIM}         ${tokens(month.cacheReadTokens)} cached (prefix re-reads, billed at a tenth)${RST}`,
     `  ${BOLD}Actual cost:${RST}     ${dollars(month.cost)}`,
-    `  ${BOLD}Opus 4.6 would be:${RST} ${dollars(month.baselineCost)}`,
+    `  ${BOLD}${modelLabel(BASELINE_MODEL)} would be:${RST} ${dollars(month.baselineCost)}`,
     `  ${GREEN}${BOLD}You saved:${RST}       ${GREEN}${BOLD}${dollars(totalSaved)}${RST}  ${DIM}(${pct(totalSaved, month.baselineCost)})${RST}`,
     "",
     `  ${DIM}Ledger: ${LEDGER_PATH}${RST}`,

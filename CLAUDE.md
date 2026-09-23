@@ -29,6 +29,9 @@ Proxy flow per request:
 - **behavesAs**: The sentinel is registered via `--settings` with `behavesAs` set to the **cheapest** tier's model (`behavesAsModel()` in `src/config.mjs`), so Claude Code knows the context window and capabilities. It must be the cheapest tier, not the middle one — any turn can route down to it, and a request sized for a larger model gets rejected upstream mid-session. Override with `CLAUDE_JEV_BEHAVES_AS` when every tier shares a context window.
 - **Thinking blocks are model-scoped**: A thinking block's signature only verifies on the model that produced it. `stripThinkingHistory()` in `src/proxy.mjs` removes `thinking` / `redacted_thinking` blocks from the history whenever the tier changes, or when the target tier cannot think. It only runs on a fresh user turn — tool-loop continuations keep their pinned tier, so a pending `tool_use` is never separated from its thinking block.
 - **Permissions**: The launcher always appends `--dangerously-skip-permissions`. Intentional — the wrapper is for unattended routing runs.
+- **The proxy prints nothing**: routing goes to `~/.claude-jev/current.json` (`src/state.mjs`, temp+rename so a reader never sees half a file) and is rendered by `bin/statusline.mjs` in Claude Code's status line — the one row it owns. The old stderr banner wrote cursor-control sequences into a terminal Claude Code was repainting, and `await animateSwitch(...)` delayed every request ~600ms. `writeState()` is fire-and-forget and swallows everything: a cosmetic file must never be able to fail a request.
+- **A statusLine is only injected when the user has none**: our `--settings` file outranks `settings.json`, so setting one unconditionally would silently replace theirs for the session. `CLAUDE_JEV_STATUSLINE=1` forces it, `0` disables it.
+- **Debug logging is counts, not text**: `JEV_DEBUG=1` logs tiers, timings and token counts; prompt text needs `JEV_DEBUG_PROMPTS=1`. The log rotates at 5MB keeping one generation, because it previously grew forever while recording 80 characters of every prompt.
 - **Report new tokens, not raw input**: `aggregate()` splits input into `newInputTokens` (uncached + cache writes) and `cacheReadTokens`, and both dashboards lead with the former. An agent turn is several requests and each one's cache read is roughly the previous request's whole input, so summing `inputTokens` counts the same prefix repeatedly — a real ledger read 5.7M against 764k of genuine new content for the same $1.84. Events written before cache accounting have no breakdown; their `inputTokens` were uncached-only, so they count wholly as new.
 - **Cache tokens are most of the bill**: Claude Code caches nearly every turn, so `input_tokens` alone is a small fraction of billed input. `mergeUsage()` in `src/proxy.mjs` also captures `cache_creation_input_tokens` (preferring the per-TTL `cache_creation` breakdown) and `cache_read_input_tokens`; `cost()` prices them at 1.25x / 2x / 0.1x the model's input rate. Counts in the SSE stream are cumulative per response, so `mergeUsage` assigns rather than adds. Getting this wrong does not just shrink the numbers — cache reads bill at a tenth, so the actual and baseline sides move by different factors and the savings percentage itself goes wrong.
 - **No silent $0**: An unpriced model id is costed at baseline rates and the event is flagged `estimated: true`. Returning 0 for an unknown model made any `CLAUDE_JEV_*_MODEL` override look free.
@@ -53,7 +56,7 @@ Proxy flow per request:
 |--------|------------------------------|--------|----------|
 | haiku  | claude-haiku-4-5-20251001    | null   | no       |
 | sonnet | claude-sonnet-5              | high   | yes      |
-| opus   | claude-opus-4-6              | high   | yes      |
+| opus   | claude-opus-5                | high   | yes      |
 
 Default starting tier is **haiku**. Jev upgrades when needed.
 
@@ -75,6 +78,8 @@ Default starting tier is **haiku**. Jev upgrades when needed.
 | `src/env.mjs` | `~/.claude-jev.env` loader, shared by the launcher and the routing tests |
 | `src/web-dashboard.html` | Dashboard: metrics, usage gauges, recent requests. Links to `/chat` |
 | `src/web-chat.html` | Full-screen chat page at `/chat`, with the `/` command typeahead |
+| `src/state.mjs` | Current routing decision on disk, for the status line |
+| `bin/statusline.mjs` | Renders the tier and today's saving in Claude Code's status line |
 | `src/skills.mjs` | Slash-command discovery: filesystem scan + Claude Code's authoritative list |
 
 ## Environment variables
@@ -94,6 +99,9 @@ Default starting tier is **haiku**. Jev upgrades when needed.
 | `CLAUDE_JEV_AGENT_CWD` | Working directory for agent chat |
 | `CLAUDE_JEV_AGENT_DIRS` | Extra writable roots, `;`-separated, passed as `--add-dir` |
 | `CLAUDE_JEV_UPLOAD_DIR` | Where pasted chat images are stored |
+| `CLAUDE_JEV_STATE_PATH` | Status-line state file |
+| `CLAUDE_JEV_STATUSLINE` | `1` force our status line, `0` never |
+| `JEV_DEBUG_PROMPTS` | `1` also logs prompt text |
 
 ## Known issues / things to watch
 

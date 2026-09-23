@@ -1,6 +1,6 @@
 import http from "node:http";
 import https from "node:https";
-import { appendFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, mkdirSync, statSync, renameSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
@@ -9,100 +9,42 @@ import { askJev, decide } from "./router.mjs";
 import { record } from "./ledger.mjs";
 import { cost, baselineCost, totalInputTokens, isPriced } from "./pricing.mjs";
 import { captureFromHeaders } from "./usage-state.mjs";
+import { writeState } from "./state.mjs";
 
 const UPSTREAM = "api.anthropic.com";
 const LOG_FILE = process.env.JEV_DEBUG
   ? join(homedir(), ".claude-jev", "debug.log")
   : null;
 
+const LOG_MAX_BYTES = 5 * 1024 * 1024;
+
+/**
+ * Prompt text is only logged when asked for explicitly.
+ *
+ * JEV_DEBUG used to write the first 80 characters of every prompt to a file
+ * that was never rotated — so turning on debugging quietly built a permanent
+ * transcript. Diagnosing routing rarely needs the words; when it does,
+ * JEV_DEBUG_PROMPTS=1 opts in.
+ */
+const LOG_PROMPTS = process.env.JEV_DEBUG_PROMPTS === "1";
+
+/** Keep one previous generation, so the log cannot grow without bound. */
+function rotateIfLarge() {
+  try {
+    if (statSync(LOG_FILE).size < LOG_MAX_BYTES) return;
+    renameSync(LOG_FILE, `${LOG_FILE}.1`);   // replaces any existing .1
+  } catch { /* absent, or racing another session — nothing to do */ }
+}
+
 function log(msg) {
   if (!LOG_FILE) return;
   try {
     mkdirSync(dirname(LOG_FILE), { recursive: true });
+    rotateIfLarge();
     appendFileSync(LOG_FILE, `[${new Date().toISOString()}] ${msg}\n`);
   } catch {
     process.stderr.write(`[claude-jev] ${msg}\n`);
   }
-}
-
-// ── Tier colors ─────────────────────────────────────────────────────────────
-const TIER_COLOR = {
-  haiku:  "\x1b[32m",   // green
-  sonnet: "\x1b[33m",   // yellow
-  opus:   "\x1b[35m",   // magenta
-};
-const BOLD = "\x1b[1m";
-const DIM  = "\x1b[2m";
-const RST  = "\x1b[0m";
-const HIDE_CURSOR = "\x1b[?25l";
-const SHOW_CURSOR = "\x1b[?25h";
-const CLEAR_LINE  = "\x1b[2K\r";
-
-const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-const SWITCH_FRAMES = ["◐", "◓", "◑", "◒"];
-
-/**
- * Animate a model-switch transition on stderr.
- * ~600ms total — fast enough to not block, visible enough to notice.
- */
-function animateSwitch(fromTier, toTier, spec, confidence) {
-  const w = process.stderr;
-  if (!w.isTTY) {
-    // No animation for non-TTY — just print the result
-    const c = TIER_COLOR[toTier] ?? "\x1b[36m";
-    w.write(`${c}⚡ jev → ${BOLD}${toTier}${RST}${c} (${spec?.id})${RST}` +
-      (confidence != null ? ` p=${confidence.toFixed(2)}` : "") + "\n");
-    return Promise.resolve();
-  }
-
-  const fromColor = TIER_COLOR[fromTier] ?? "\x1b[36m";
-  const toColor   = TIER_COLOR[toTier]   ?? "\x1b[36m";
-  const changed   = fromTier !== toTier;
-
-  return new Promise((resolve) => {
-    w.write(HIDE_CURSOR);
-    let frame = 0;
-    const totalFrames = changed ? 12 : 6;
-    const interval = setInterval(() => {
-      if (frame < totalFrames) {
-        if (changed && frame < 6) {
-          // Phase 1: spin away from old model
-          const s = SWITCH_FRAMES[frame % SWITCH_FRAMES.length];
-          w.write(`${CLEAR_LINE}${fromColor}${DIM}  ${s} ${fromTier}${RST}`);
-        } else if (changed) {
-          // Phase 2: spin into new model
-          const s = SWITCH_FRAMES[frame % SWITCH_FRAMES.length];
-          const progress = "━".repeat(frame - 5) + "╸" + "┄".repeat(totalFrames - frame);
-          w.write(`${CLEAR_LINE}${toColor}  ${s} ${progress} ${BOLD}${toTier}${RST}`);
-        } else {
-          // No change: just a quick thinking spinner
-          const s = SPINNER[frame % SPINNER.length];
-          w.write(`${CLEAR_LINE}${toColor}  ${s} routing...${RST}`);
-        }
-        frame++;
-      } else {
-        clearInterval(interval);
-        // Final line
-        const arrow = changed
-          ? `${fromColor}${DIM}${fromTier}${RST} → ${toColor}${BOLD}${toTier}${RST}`
-          : `${toColor}${BOLD}${toTier}${RST}`;
-        const conf = confidence != null ? ` ${DIM}p=${confidence.toFixed(2)}${RST}` : "";
-        const model = `${DIM}(${spec?.id})${RST}`;
-        w.write(`${CLEAR_LINE}${toColor}  ⚡${RST} ${arrow} ${model}${conf}\n`);
-        w.write(SHOW_CURSOR);
-        resolve();
-      }
-    }, 50);
-  });
-}
-
-/** Quick banner for same-tier (no switch). */
-function printStatic(tier, spec, confidence) {
-  const c = TIER_COLOR[tier] ?? "\x1b[36m";
-  const conf = confidence != null ? ` ${DIM}p=${confidence.toFixed(2)}${RST}` : "";
-  process.stderr.write(
-    `${c}  ⚡${RST} ${c}${BOLD}${tier}${RST} ${DIM}(${spec?.id})${RST}${conf}\n`,
-  );
 }
 
 /**
@@ -355,15 +297,19 @@ export async function startProxy() {
               state.tier = tier;
               log(
                 `${jev ? `${jev.ms}ms p=${jev.confidence.toFixed(2)}` : "no-jev"} ` +
-                  `-> ${tier} (${reason}) | ${prompt.slice(0, 80)}`,
+                  `-> ${tier} (${reason})` +
+                  (LOG_PROMPTS ? ` | ${prompt.slice(0, 80)}` : ` | ${prompt.length} chars`),
               );
-              const spec = tierSpec(state.tier);
-              const conf = jev?.confidence ?? null;
-              if (previous !== tier) {
-                await animateSwitch(previous, tier, spec, conf);
-              } else {
-                printStatic(tier, spec, conf);
-              }
+              // Publish for the status line. Never awaited and never written
+              // to the terminal: the old animation both corrupted Claude
+              // Code's display and delayed the request by ~600ms.
+              writeState({
+                tier,
+                previous,
+                model: tierSpec(state.tier)?.id ?? null,
+                confidence: jev?.confidence ?? null,
+                reason,
+              });
             }
 
             // A tier change invalidates any thinking block already in the
