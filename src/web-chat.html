@@ -71,7 +71,24 @@ main::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radiu
 .msg.bot .bubble { background: rgba(255,255,255,0.04); border: 1px solid var(--line); color: rgba(240,238,233,0.9); border-radius: 22px 22px 22px 5px; }
 .msg.bot .bubble.err { border-color: rgba(180,85,63,0.4); color: #d98b72; }
 .routed { display: flex; align-items: center; gap: 9px; font-size: 11px; color: rgba(240,238,233,0.3); flex-wrap: wrap; }
-.tool { font-size: 11px; color: var(--sage); opacity: 0.75; }
+/* No empty box while the status line is doing the talking. */
+.msg.bot .bubble:empty { display: none; }
+
+/* One live status line per turn, in place of a growing list of tool names. */
+.working { display: flex; align-items: baseline; gap: 10px; font-size: 12.5px; }
+.working .verb { color: var(--sage); }
+/* The dots animate inside ::after so the label itself never shifts. */
+.working .verb::after {
+  content: "..."; display: inline-block; width: 1.05em; margin-left: 1px;
+  text-align: left; overflow: hidden; vertical-align: bottom;
+  animation: dots 1.5s steps(4, end) infinite;
+}
+@keyframes dots { 0% { width: 0; } 100% { width: 1.05em; } }
+.working .steps {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.18em;
+  text-transform: uppercase; color: rgba(240,238,233,0.22);
+}
+@media (prefers-reduced-motion: reduce) { .working .verb::after { animation: none; width: 1.05em; } }
 .denied { font-size: 11.5px; color: #d98b72; background: rgba(180,85,63,0.10); border: 1px solid rgba(180,85,63,0.28); border-radius: 14px; padding: 9px 14px; line-height: 1.5; }
 .denied code { color: var(--clay); font-size: 11px; }
 .tool::before { content: "\2699  "; }
@@ -229,7 +246,34 @@ async function send() {
 
   const holder = bubble("assistant", "");
   const body = holder.querySelector(".bubble");
-  body.classList.add("caret");
+
+  // Human wording for what the agent is doing, so the status line reads as
+  // activity rather than a list of internal tool names.
+  const VERB = {
+    Glob: "Searching", Grep: "Searching", Read: "Reading",
+    Edit: "Editing", Write: "Writing", NotebookEdit: "Editing",
+    WebSearch: "Searching the web", WebFetch: "Fetching",
+    Bash: "Running", PowerShell: "Running", Task: "Delegating",
+    TodoWrite: "Planning",
+  };
+  let steps = 0;
+  let status = null;
+
+  function setStatus(label, count) {
+    if (!status) {
+      status = document.createElement("div");
+      status.className = "working";
+      holder.insertBefore(status, body);
+    }
+    status.innerHTML = `<span class="verb">${esc(label)}</span>` +
+      (count > 1 ? `<span class="steps">${count} steps</span>` : "");
+  }
+  function clearStatus() {
+    status?.remove();
+    status = null;
+  }
+
+  setStatus("Thinking", 0);
   const atBottom = () => $("scroll").scrollHeight - $("scroll").scrollTop - $("scroll").clientHeight < 120;
 
   try {
@@ -282,10 +326,10 @@ async function send() {
               `(empty allows everything) and <code>CLAUDE_JEV_AGENT_TOOLS</code>, then restart claude-jev.`;
           holder.insertBefore(warn, body);
         } else if (ev[1] === "tool") {
-          const tip = document.createElement("div");
-          tip.className = "tool";
-          tip.textContent = data.name;
-          holder.insertBefore(tip, body);
+          // One status line that changes, rather than a line per tool call —
+          // an agent doing real work stacks up dozens of them otherwise.
+          steps++;
+          setStatus(VERB[data.name] || "Working", steps);
         } else if (ev[1] === "routed") {
           const badge = document.createElement("div");
           badge.className = "routed";
@@ -294,8 +338,11 @@ async function send() {
             `<span>${esc(data.model)}${conf}</span>`;
           holder.insertBefore(badge, body);
         } else if (ev[1] === "delta") {
+          clearStatus();          // the answer is arriving; stop narrating
+          body.classList.add("caret");
           body.textContent += data.text;
         } else if (ev[1] === "failed") {
+          clearStatus();
           body.classList.add("err");
           body.textContent = data.error;
         }
@@ -310,6 +357,7 @@ async function send() {
     body.classList.add("err");
     body.textContent = err.message;
   } finally {
+    clearStatus();            // a turn that ends without text must not leave it spinning
     body.classList.remove("caret");
     setStreaming(false);
   }
