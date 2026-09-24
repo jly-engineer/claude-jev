@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <title>claude-jev &mdash; chat</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%E2%9A%A1%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -20,6 +20,9 @@
 }
 *, *::before, *::after { box-sizing: border-box; }
 html, body { height: 100%; }
+/* The visible height, which excludes the on-screen keyboard: --vvh is set
+   from visualViewport, since iOS Safari does not shrink dvh for it. */
+body { height: var(--vvh, 100dvh); }
 body {
   margin: 0; display: flex; flex-direction: column;
   background-color: var(--bg); color: var(--paper);
@@ -50,7 +53,9 @@ header h1 {
   font-size: 28px; line-height: 1; letter-spacing: -0.035em;
 }
 header .hand { font-size: 17px; display: block; margin-bottom: 2px; }
-.meta { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.meta { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-left: auto; }
+.actions { display: flex; align-items: center; gap: 10px; }
+.menubtn { display: none; }
 .backlink, .backend {
   font-size: 11px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase;
 }
@@ -207,6 +212,68 @@ textarea::placeholder { color: rgba(240,238,233,0.25); }
 .hint { max-width: 860px; margin: 0 auto; padding: 0 clamp(20px, 5vw, 32px) 16px; font-size: 11px; color: rgba(240,238,233,0.22); }
 .notice { max-width: 860px; margin: 0 auto; padding: 22px clamp(20px, 5vw, 32px) 26px; font-size: 13.5px; line-height: 1.65; color: rgba(240,238,233,0.45); }
 .notice code { color: var(--clay); font-size: 12.5px; }
+/* ── Phones and narrow windows ── */
+@media (max-width: 640px) {
+  header {
+    padding: max(10px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left));
+    gap: 12px;
+  }
+  header .hand { display: none; }
+  header h1 { font-size: 22px; }
+
+  /* Secondary links fold into a menu under the ☰ button. */
+  .menubtn {
+    display: inline-grid; place-items: center; width: 44px; height: 44px; padding: 0;
+    border: 1px solid var(--line); border-radius: 50%; background: rgba(255,255,255,0.03); cursor: pointer;
+  }
+  .menubtn span, .menubtn span::before, .menubtn span::after {
+    display: block; width: 18px; height: 2px; border-radius: 2px; background: var(--paper); position: relative;
+    transition: transform 0.15s ease, background 0.15s ease;
+  }
+  .menubtn span::before, .menubtn span::after { content: ""; position: absolute; left: 0; }
+  .menubtn span::before { top: -6px; }
+  .menubtn span::after { top: 6px; }
+  header.menu-open .menubtn span { background: transparent; }
+  header.menu-open .menubtn span::before { transform: translateY(6px) rotate(45deg); }
+  header.menu-open .menubtn span::after { transform: translateY(-6px) rotate(-45deg); }
+
+  .meta {
+    display: none; position: absolute; top: calc(100% + 6px); right: max(14px, env(safe-area-inset-right)); z-index: 7;
+    min-width: 220px; flex-direction: column; align-items: stretch; gap: 0; padding: 6px 0;
+    background: var(--surface); border: 1px solid rgba(212,163,115,0.25); border-radius: 18px;
+    box-shadow: 0 40px 70px -30px rgba(0,0,0,0.85);
+  }
+  header.menu-open .meta { display: flex; }
+  .meta > * { padding: 13px 20px; margin: 0; }
+  .meta .backlink, .meta button.backlink { border-bottom: 0 !important; font-size: 12px; text-align: left; width: 100%; }
+  .meta .backend { order: 10; font-size: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .meta .wordmark { order: 9; }
+  .meta form { display: block !important; }
+
+  .send.newchat { padding: 11px 16px; font-size: 9.5px; letter-spacing: 0.2em; min-height: 44px; }
+
+  .drawer { left: 10px; right: 10px; width: auto; max-height: 70dvh; }
+  .chat-row { padding: 14px 12px 14px 16px; }
+  .chat-row .del { padding: 10px 12px; }
+
+  /* More of the screen for the conversation. */
+  .log { padding: 18px max(14px, env(safe-area-inset-left)) 18px; gap: 18px; }
+  .msg { max-width: 92%; }
+  .bubble { padding: 12px 16px; font-size: 15px; }
+  .welcome { padding-top: 5vh; font-size: 14px; }
+  .welcome .serif { font-size: 26px; }
+  .sent img { max-width: 160px; max-height: 160px; }
+
+  .composer { padding: 10px max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left)); gap: 8px; }
+  .field { padding: 2px 16px; border-radius: 22px; }
+  /* 16px or iOS zooms the page when the field is focused. */
+  textarea { font-size: 16px; padding: 10px 0; max-height: 30dvh; }
+  #send { padding: 0 18px; min-height: 44px; }
+  .menu { left: 12px; right: 12px; }
+
+  .hint { padding: 0 max(14px, env(safe-area-inset-left)) max(8px, env(safe-area-inset-bottom)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 10.5px; }
+  .notice { padding: 16px max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-bottom)); font-size: 13px; }
+}
 </style>
 </head>
 <body>
@@ -217,12 +284,15 @@ textarea::placeholder { color: rgba(240,238,233,0.25); }
     <span class="hand">talk to it</span>
     <h1>Chat</h1>
   </div>
-  <div class="meta">
+  <div class="meta" id="meta">
     <span class="backend" id="backend"></span>
     <a class="wordmark" href="https://joetechninja.com" target="_blank" rel="noopener" aria-label="joetechninja.com"><b>joetechninja</b><span>.com</span></a>
     <a class="backlink" href="/" id="back">Dashboard</a>
     <a class="backlink" href="#" id="chats" aria-expanded="false" aria-controls="drawer">History</a>
+  </div>
+  <div class="actions">
     <a class="send newchat" href="#" id="newChat">New chat</a>
+    <button class="menubtn" id="menuBtn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="meta"><span></span></button>
   </div>
   <div class="drawer" id="drawer" hidden></div>
 </header>
@@ -726,6 +796,40 @@ $("menu").addEventListener("mousedown", (e) => {
 $("input").addEventListener("input", renderMenu);
 $("input").addEventListener("click", renderMenu);
 $("input").addEventListener("blur", () => setTimeout(closeMenu, 120));
+
+// ── Narrow screens ─────────────────────────────────────────────────────────
+function setMenu(open) {
+  document.querySelector("header").classList.toggle("menu-open", open);
+  $("menuBtn").setAttribute("aria-expanded", String(open));
+}
+$("menuBtn").addEventListener("click", (e) => {
+  e.stopPropagation();
+  setMenu(!document.querySelector("header").classList.contains("menu-open"));
+});
+// Choosing anything in the menu closes it; History then opens its own list.
+$("meta").addEventListener("click", () => setMenu(false));
+document.addEventListener("click", (e) => {
+  if (!e.target.closest("#meta, #menuBtn")) setMenu(false);
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") setMenu(false); });
+
+const narrow = matchMedia("(max-width: 640px)");
+const fitPlaceholder = () => { $("input").placeholder = narrow.matches ? "Message…" : "Ask something, or paste an image…"; };
+narrow.addEventListener("change", fitPlaceholder);
+fitPlaceholder();
+
+// Keep the composer above the on-screen keyboard. iOS Safari does not shrink
+// the layout for it, so size the page to the visible viewport instead.
+if (window.visualViewport) {
+  const fit = () => {
+    const stick = $("scroll").scrollHeight - $("scroll").scrollTop - $("scroll").clientHeight < 120;
+    document.documentElement.style.setProperty("--vvh", visualViewport.height + "px");
+    window.scrollTo(0, 0);
+    if (stick) $("scroll").scrollTop = $("scroll").scrollHeight;
+  };
+  visualViewport.addEventListener("resize", fit);
+  fit();
+}
 
 loadSkills();
 probe();
