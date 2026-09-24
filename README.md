@@ -51,7 +51,8 @@ Install claude-jev from https://github.com/jly-engineer/claude-jev and set it up
    on my OS (on Ubuntu, apt's nodejs is too old — use nvm or NodeSource).
 2. Check `claude --version` works. If not, stop and point me at
    https://code.claude.com/docs/en/setup
-3. Clone the repo somewhere sensible, run `npm install`, then `npm link`.
+3. Clone the repo to ~/src/claude-jev (on Windows, %USERPROFILE%\src\claude-jev),
+   run `npm install`, then `npm link`.
    If npm link fails with EACCES, do not use sudo — set a user prefix instead:
    `npm config set prefix ~/.npm-global` and add ~/.npm-global/bin to my PATH.
 4. Ask me for my TypeSafe Jev key (free from https://console.typesafe.ai/keys)
@@ -69,8 +70,8 @@ Claude Code settings.
 ### Or install it yourself
 
 ```bash
-git clone https://github.com/jly-engineer/claude-jev.git
-cd claude-jev
+git clone https://github.com/jly-engineer/claude-jev.git ~/src/claude-jev
+cd ~/src/claude-jev
 npm install
 npm link
 echo "JEV_API_KEY=sk-your-key-here" > ~/.claude-jev.env
@@ -78,6 +79,8 @@ claude-jev
 ```
 
 Needs **Node 20+**, [Claude Code](https://code.claude.com/docs/en/setup) on your `PATH`, and a free [Jev key](https://console.typesafe.ai/keys). `npm link` symlinks the checkout, so `git pull` is the upgrade.
+
+The checkout lives at `~/src/claude-jev` on every OS — `%USERPROFILE%\src\claude-jev` on Windows, where `~` also works in PowerShell. Only the `claude-jev` command's own location varies, because npm puts it wherever your Node install keeps global packages; `npm ls -g claude-jev` shows where it points.
 
 ### Linux and macOS
 
@@ -95,9 +98,10 @@ Fully supported. Two things specific to **Ubuntu 24.04**:
 
 ### Updating
 
-In the checkout, on any OS (PowerShell works too):
+On any OS (PowerShell works too):
 
 ```bash
+cd ~/src/claude-jev
 git pull
 npm install
 npm test
