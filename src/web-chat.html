@@ -143,6 +143,11 @@ textarea::placeholder { color: rgba(240,238,233,0.25); }
 .send:hover:not(:disabled) { background: #fff; transform: scale(1.03); }
 .send:active:not(:disabled) { transform: scale(0.97); }
 .send:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+/* Send's look, sized for the header. An <a>, so it needs its own hover. */
+.send.newchat { padding: 11px 22px; box-shadow: 0 15px 30px -12px rgba(0,0,0,0.55); }
+.send.newchat:hover { background: #fff; color: var(--ink); transform: scale(1.03); }
+.send.newchat:active { transform: scale(0.97); }
+.send.newchat.busy { opacity: 0.35; cursor: not-allowed; transform: none; }
 /* ── Slash typeahead ── */
 .composer { position: relative; }
 .menu {
@@ -217,7 +222,7 @@ textarea::placeholder { color: rgba(240,238,233,0.25); }
     <a class="wordmark" href="https://joetechninja.com" target="_blank" rel="noopener" aria-label="joetechninja.com"><b>joetechninja</b><span>.com</span></a>
     <a class="backlink" href="/" id="back">Dashboard</a>
     <a class="backlink" href="#" id="chats" aria-expanded="false" aria-controls="drawer">History</a>
-    <a class="backlink" href="#" id="newChat">New chat</a>
+    <a class="send newchat" href="#" id="newChat">New chat</a>
   </div>
   <div class="drawer" id="drawer" hidden></div>
 </header>
@@ -409,6 +414,8 @@ function setStreaming(on) {
   streaming = on;
   $("send").disabled = on;
   $("send").textContent = on ? "···" : "Send";
+  $("newChat").classList.toggle("busy", on);
+  $("newChat").setAttribute("aria-disabled", String(on));
 }
 
 async function send() {
