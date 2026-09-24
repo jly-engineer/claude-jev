@@ -107,7 +107,7 @@ No need to re-run `npm link` — the global `claude-jev` already points at the c
 
 Then quit any running `claude-jev` and start it again. Nothing reloads in place: code, `~/.claude-jev.env` and the generated settings file are all read at launch.
 
-If `git pull` refuses because of local changes, check `git status`. On Linux and macOS, `npm link` can flip the executable bit on `bin/claude-jev.mjs`; `git config core.fileMode false` makes git ignore that.
+If `git pull` refuses because of local changes, check `git diff`. A mode-only change on `bin/claude-jev.mjs` (`old mode 100644` / `new mode 100755`) comes from `npm link` on checkouts older than the fix; `git checkout bin/claude-jev.mjs`, pull, then `chmod +x bin/claude-jev.mjs`. Don't set `core.fileMode false` — a pull can then drop the executable bit silently, and `claude-jev` fails with `Permission denied`.
 
 Can't find the checkout? `npm ls -g claude-jev` prints where the link points.
 
