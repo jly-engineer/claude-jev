@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawn, execSync } from "node:child_process";
-import { writeFileSync, mkdirSync, readFileSync, existsSync } from "node:fs";
+import { writeFileSync, mkdirSync, readFileSync, existsSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -123,9 +123,12 @@ if (jevKey) {
   // route down to it, and a request sized for a larger model is rejected
   // upstream. Override with CLAUDE_JEV_BEHAVES_AS if every tier shares a
   // window.
-  const settingsFile = join(tmpdir(), "claude-jev", "settings.json");
+  // Per process: the file carries this process's proxy port, and a shared
+  // path let a second session repoint the first one's chat agent.
+  const settingsFile = join(tmpdir(), "claude-jev", `settings-${process.pid}.json`);
   try {
     mkdirSync(dirname(settingsFile), { recursive: true });
+    process.on("exit", () => rmSync(settingsFile, { force: true }));
     const settings = {
       // A user settings `env` block (e.g. another local proxy) overrides the
       // process env var and would bypass us; --settings outranks it.
