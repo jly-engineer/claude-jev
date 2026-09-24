@@ -93,6 +93,24 @@ Fully supported. Two things specific to **Ubuntu 24.04**:
 
 `xdg-open` is only used to open a browser; headless it does nothing and the URL still prints to `~/.claude-jev/dashboard.url`.
 
+### Updating
+
+In the checkout, on any OS (PowerShell works too):
+
+```bash
+git pull
+npm install
+npm test
+```
+
+No need to re-run `npm link` — the global `claude-jev` already points at the checkout. `npm install` only matters when dependencies change, but is safe every time.
+
+Then quit any running `claude-jev` and start it again. Nothing reloads in place: code, `~/.claude-jev.env` and the generated settings file are all read at launch.
+
+If `git pull` refuses because of local changes, check `git status`. On Linux and macOS, `npm link` can flip the executable bit on `bin/claude-jev.mjs`; `git config core.fileMode false` makes git ignore that.
+
+Can't find the checkout? `npm ls -g claude-jev` prints where the link points.
+
 ---
 
 ## Configuring the chat agent
