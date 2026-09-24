@@ -11,6 +11,7 @@ import { agentAvailable, newAgentSession, runAgentTurn, agentConfig } from "./ag
 import { TIER_NAMES, tierSpec } from "./config.mjs";
 import { listSkills } from "./skills.mjs";
 import { saveImage, pruneUploads, MAX_BYTES, UPLOAD_DIR } from "./uploads.mjs";
+import { validChatId, loadChat, newChat, saveChat, listChats, deleteChat } from "./chats.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const HTML_PATH = join(HERE, "web-dashboard.html");
@@ -159,6 +160,46 @@ export async function startDashboardServer(preferredPort = 0, opts = {}) {
       return;
     }
 
+    if (url.pathname === "/api/chats" && req.method === "GET") {
+      res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+      res.end(JSON.stringify({ chats: listChats() }));
+      return;
+    }
+
+    const chatPath = /^\/api\/chats\/([^/]+)$/.exec(url.pathname);
+    if (chatPath) {
+      const id = chatPath[1];
+      const json = (status, body) =>
+        res.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store" }).end(JSON.stringify(body));
+      if (!validChatId(id)) return json(400, { error: "invalid chat id" });
+      if (req.method === "GET") {
+        // A chat nobody has written to yet is simply empty: the page opens a
+        // fresh id on every first visit.
+        const chat = loadChat(id) ?? newChat(id);
+        // Internal state (agent session, API history) stays server-side.
+        return json(200, { id: chat.id, title: chat.title, created: chat.created, updated: chat.updated, messages: chat.messages });
+      }
+      if (req.method === "DELETE") {
+        resetSession(id);
+        return json(200, { ok: true, deleted: deleteChat(id) });
+      }
+      return json(405, { error: "method not allowed" });
+    }
+
+    // Pasted images, so a reopened chat can show them. Names are ones
+    // saveImage() generated; anything else never reaches the filesystem.
+    const upload = /^\/api\/uploads\/([a-z0-9]+-[0-9a-f]{12}\.(png|jpg|gif|webp))$/.exec(url.pathname);
+    if (upload && req.method === "GET") {
+      try {
+        const bytes = readFileSync(join(UPLOAD_DIR, upload[1]));
+        res.writeHead(200, { "Content-Type": MIME_BY_EXT["." + upload[2]], "Cache-Control": "private, max-age=86400" });
+        res.end(bytes);
+      } catch {
+        res.writeHead(404, { "Content-Type": "application/json" }).end(JSON.stringify({ error: "image no longer available" }));
+      }
+      return;
+    }
+
     if (url.pathname === "/api/chat/reset" && req.method === "POST") {
       const { id = "default" } = await readJson(req).catch(() => ({}));
       resetSession(id);
@@ -233,6 +274,11 @@ async function handleChat(req, res, { proxyPort, backend, settingsFile }) {
     }));
     return;
   }
+  // The id names a file on disk, so it must be one of ours.
+  if (!validChatId(id)) {
+    res.writeHead(400, { "Content-Type": "application/json" }).end(JSON.stringify({ error: "invalid chat id" }));
+    return;
+  }
 
   res.writeHead(200, {
     "Content-Type": "text/event-stream; charset=utf-8",
@@ -255,8 +301,22 @@ data: ${JSON.stringify(data)}
  * request carries tools and so survives extractPrompt().
  */
 async function agentChat({ res, send, id, text, images, proxyPort, settingsFile }) {
+  const chat = loadChat(id) ?? newChat(id);
   const s = session(id);
+  // After a restart the in-memory session is new, but Claude Code still has
+  // the conversation on disk: pick it up rather than starting over.
+  if (!s.agentSession && chat.agentSession) {
+    s.agentSession = chat.agentSession;
+    s.agentStarted = chat.agentStarted;
+  }
   s.agentSession ??= newAgentSession();
+
+  // Saved before the turn runs, so a refresh mid-reply still shows the question.
+  chat.backend = "agent";
+  chat.agentSession = s.agentSession;
+  chat.messages.push({ role: "user", text, images });
+  saveChat(chat);
+  const turn = newTurn();
 
   const cfg = agentConfig();
   send("backend", { backend: "agent", tools: cfg.tools, deny: cfg.deny, writable: cfg.writable, cwd: cfg.cwd, dirs: cfg.dirs });
@@ -281,25 +341,69 @@ async function agentChat({ res, send, id, text, images, proxyPort, settingsFile 
         if (ev.kind === "routed") {
           if (announced) return;          // one badge per turn
           announced = true;
-          send("routed", { model: ev.model, tier: tierOf(ev.model) });
-        } else if (ev.kind === "delta") send("delta", { text: ev.text });
-        else if (ev.kind === "tool") send("tool", { name: ev.name });
-        else if (ev.kind === "denied") send("denied", { reason: ev.reason, name: ev.name, path: ev.path });
-        else if (ev.kind === "failed") send("failed", { error: ev.error });
-        else if (ev.kind === "done") send("done", { costUsd: ev.costUsd });
+          turn.model = ev.model;
+          turn.tier = tierOf(ev.model);
+          send("routed", { model: ev.model, tier: turn.tier });
+        } else if (ev.kind === "delta") {
+          turn.text += ev.text;
+          send("delta", { text: ev.text });
+        } else if (ev.kind === "tool") {
+          turn.tools++;
+          send("tool", { name: ev.name });
+        } else if (ev.kind === "denied") {
+          const denial = { reason: ev.reason, name: ev.name, path: ev.path };
+          turn.denied.push(denial);
+          send("denied", denial);
+        } else if (ev.kind === "failed") {
+          turn.error = ev.error;
+          send("failed", { error: ev.error });
+        } else if (ev.kind === "done") send("done", { costUsd: ev.costUsd });
       },
     );
     s.agentStarted = true;
   } catch (err) {
+    turn.error = err.message;
     send("failed", { error: err.message });
   }
+  // Saved even if the browser went away mid-reply, so reopening shows it.
+  chat.agentStarted = s.agentStarted;
+  chat.messages.push(turn);
+  saveChat(chat);
   res.end();
 }
+
+const newTurn = () => ({ role: "assistant", text: "", model: null, tier: null, tools: 0, denied: [], error: null });
 
 /** Direct API call with an API key. Tier chosen here, since a toolless
  *  request would otherwise never be routed by the proxy. */
 async function apiChat({ res, send, id, text, images, proxyPort }) {
+  const chat = loadChat(id) ?? newChat(id);
   const s = session(id);
+  // After a restart the in-memory history is empty; the saved copy is not.
+  if (s.messages.length === 0 && chat.api) {
+    s.messages = chat.api.messages;
+    s.tier = chat.api.tier;
+  }
+  chat.backend = "api";
+  chat.messages.push({ role: "user", text, images });
+  saveChat(chat);
+  const turn = newTurn();
+
+  // Every exit — success, upstream error, network error — records the turn once.
+  let finished = false;
+  const finish = (error) => {
+    if (finished) return;
+    finished = true;
+    if (error) {
+      turn.error = error;
+      send("failed", { error });
+    }
+    chat.api = { messages: s.messages, tier: s.tier };
+    chat.messages.push(turn);
+    saveChat(chat);
+    res.end();
+  };
+
   let plan;
   try {
     // The direct-API backend has no filesystem on the far end, so the saved
@@ -310,10 +414,11 @@ async function apiChat({ res, send, id, text, images, proxyPort }) {
     }));
     plan = await planTurn(s, text, inline);
   } catch (err) {
-    send("failed", { error: err.message });
-    res.end();
+    finish(err.message);
     return;
   }
+  turn.model = plan.model;
+  turn.tier = plan.tier;
 
   send("backend", { backend: "api" });
   send("routed", {
@@ -338,10 +443,7 @@ async function apiChat({ res, send, id, text, images, proxyPort }) {
       if (up.statusCode !== 200) {
         let errBody = "";
         up.on("data", (c) => { errBody += c; });
-        up.on("end", () => {
-          send("failed", { error: `upstream ${up.statusCode}: ${errBody.slice(0, 400)}` });
-          res.end();
-        });
+        up.on("end", () => finish(`upstream ${up.statusCode}: ${errBody.slice(0, 400)}`));
         return;
       }
 
@@ -358,11 +460,13 @@ async function apiChat({ res, send, id, text, images, proxyPort }) {
             const evt = JSON.parse(raw);
             if (evt.type === "content_block_delta" && evt.delta?.type === "text_delta") {
               answer += evt.delta.text;
+              turn.text += evt.delta.text;
               send("delta", { text: evt.delta.text });
             } else if (evt.type === "message_delta" && evt.usage) {
               send("usage", { outputTokens: evt.usage.output_tokens ?? 0 });
             } else if (evt.type === "error") {
-              send("failed", { error: evt.error?.message ?? "stream error" });
+              turn.error = evt.error?.message ?? "stream error";
+              send("failed", { error: turn.error });
             }
           } catch { /* partial frame */ }
         }
@@ -371,15 +475,12 @@ async function apiChat({ res, send, id, text, images, proxyPort }) {
       up.on("end", () => {
         commitTurn(s, text, answer);
         send("done", { tier: plan.tier });
-        res.end();
+        finish();
       });
     },
   );
 
-  upstream.on("error", (err) => {
-    send("failed", { error: err.message });
-    res.end();
-  });
+  upstream.on("error", (err) => finish(err.message));
   upstream.end(body);
 }
 

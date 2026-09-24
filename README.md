@@ -22,6 +22,7 @@ A full Claude Code agent at **/chat**, not a chat box.
 - **Works on a Pro/Max subscription** — no API key. It spawns headless Claude Code, which authenticates itself
 - **Type `/`** to autocomplete your skills, project commands and plugins
 - **Paste or drop images** straight into the composer
+- **Chats are saved** — refresh or visit the dashboard and you come back to the same chat. **Chats** lists them all; open one to carry on where it left off, or delete it
 - **Tools, read-only by default** — it can read your code, and write only where you let it
 - Every turn is routed by Jev and lands in the dashboard beside it
 
@@ -240,6 +241,7 @@ The proxy prints nothing to your terminal. The decision goes to `~/.claude-jev/c
 | `~/.claude-jev/usage.jsonl` | Usage ledger, 30-day retention |
 | `~/.claude-jev/current.json` | Current routing decision |
 | `~/.claude-jev/dashboard.url` | Dashboard URL |
+| `~/.claude-jev/chats/` | Saved chats, one file each, kept until deleted |
 | `~/.claude-jev/uploads/` | Pasted images, pruned after 24h |
 | `~/.claude-jev/debug.log` | Only with `JEV_DEBUG=1` |
 

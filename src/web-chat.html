@@ -40,7 +40,8 @@ a:hover { color: var(--paper); }
 
 /* ── Top bar ── */
 header {
-  position: relative; z-index: 2; flex: 0 0 auto;
+  /* Above main (z-index 2), or the chats drawer opens underneath the log. */
+  position: relative; z-index: 3; flex: 0 0 auto;
   display: flex; align-items: center; justify-content: space-between; gap: 24px;
   padding: 22px clamp(20px, 5vw, 56px); border-bottom: 1px solid var(--line);
 }
@@ -173,6 +174,31 @@ textarea::placeholder { color: rgba(240,238,233,0.25); }
 .wordmark:hover b { color: var(--paper); }
 .wordmark:hover span { color: var(--clay); }
 
+/* ── Saved chats ── */
+.drawer {
+  position: absolute; top: calc(100% + 8px); right: clamp(20px, 5vw, 56px); z-index: 6;
+  width: min(380px, calc(100vw - 40px)); max-height: 60vh; overflow-y: auto;
+  background: var(--surface); border: 1px solid rgba(212,163,115,0.25); border-radius: 22px;
+  box-shadow: 0 40px 70px -30px rgba(0,0,0,0.85);
+  scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.12) transparent;
+}
+.drawer[hidden] { display: none; }
+.drawer .none { padding: 18px 22px; font-size: 12.5px; color: rgba(240,238,233,0.3); }
+.chat-row { display: flex; align-items: center; gap: 10px; padding: 12px 14px 12px 20px; border-bottom: 1px solid rgba(255,255,255,0.03); cursor: pointer; }
+.chat-row:last-child { border-bottom: 0; }
+.chat-row:hover { background: rgba(255,255,255,0.03); }
+.chat-row.on { background: rgba(212,163,115,0.10); }
+.chat-row .t { flex: 1; min-width: 0; }
+.chat-row .title { font-size: 13.5px; color: var(--paper); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-row .when { font-size: 10.5px; color: rgba(240,238,233,0.3); margin-top: 2px; }
+.chat-row .del {
+  border: 0; background: none; color: rgba(240,238,233,0.3); cursor: pointer;
+  font-family: inherit; font-size: 10px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase;
+  padding: 6px 8px; border-radius: 100px;
+}
+.chat-row .del:hover { color: #d98b72; background: rgba(180,85,63,0.12); }
+.sent .gone { font-size: 11px; color: rgba(240,238,233,0.35); border: 1px dashed var(--line); border-radius: 12px; padding: 8px 12px; }
+
 .hint { max-width: 860px; margin: 0 auto; padding: 0 clamp(20px, 5vw, 32px) 16px; font-size: 11px; color: rgba(240,238,233,0.22); }
 .notice { max-width: 860px; margin: 0 auto; padding: 22px clamp(20px, 5vw, 32px) 26px; font-size: 13.5px; line-height: 1.65; color: rgba(240,238,233,0.45); }
 .notice code { color: var(--clay); font-size: 12.5px; }
@@ -190,8 +216,10 @@ textarea::placeholder { color: rgba(240,238,233,0.25); }
     <span class="backend" id="backend"></span>
     <a class="wordmark" href="https://joetechninja.com" target="_blank" rel="noopener" aria-label="joetechninja.com"><b>joetechninja</b><span>.com</span></a>
     <a class="backlink" href="/" id="back">Dashboard</a>
-    <a class="backlink" href="#" id="clear">Clear</a>
+    <a class="backlink" href="#" id="chats" aria-expanded="false" aria-controls="drawer">Chats</a>
+    <a class="backlink" href="#" id="newChat">New chat</a>
   </div>
+  <div class="drawer" id="drawer" hidden></div>
 </header>
 
 <main id="scroll">
@@ -225,7 +253,14 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const tierClass = (t) => (["haiku", "sonnet", "opus"].includes(t) ? t : "unknown");
 
-const chatId = "chat-" + Math.random().toString(36).slice(2, 10);
+// The open chat survives a refresh or a trip to the dashboard. The chat itself
+// is saved server-side; the browser only remembers which one was open.
+const CURRENT_KEY = "claude-jev.chat";
+const newId = () => "chat-" + [...crypto.getRandomValues(new Uint8Array(12))].map((b) => (b % 36).toString(36)).join("");
+let chatId = localStorage.getItem(CURRENT_KEY);
+if (!/^chat-[a-z0-9]{6,32}$/.test(chatId || "")) chatId = newId();
+localStorage.setItem(CURRENT_KEY, chatId);
+const WELCOME = `<div class="welcome" id="welcome"><span class="serif">Ask it something.</span>Routed by Jev, recorded on the dashboard. Type <code>/</code> for your skills.</div>`;
 let streaming = false;
 let chatReady = false;
 
@@ -256,12 +291,118 @@ function bubble(role, text, cls, previews) {
   const el = document.createElement("div");
   el.className = "msg " + (role === "user" ? "me" : "bot");
   el.innerHTML = `<span class="who">${role === "user" ? "you" : "claude"}</span>` +
-    ((previews || []).length ? `<div class="sent">${previews.map((src) => `<img src="${src}" alt="attached image">`).join("")}</div>` : "") +
+    ((previews || []).length ? `<div class="sent">${previews.map((src) => `<img src="${esc(src)}" alt="attached image">`).join("")}</div>` : "") +
     `<div class="bubble ${cls || ""}"></div>`;
   el.querySelector(".bubble").textContent = text;
+  // Pasted images are pruned after a while; say so instead of a broken icon.
+  el.querySelectorAll(".sent img").forEach((img) => img.addEventListener("error", () => {
+    const gone = document.createElement("span");
+    gone.className = "gone";
+    gone.textContent = "image no longer available";
+    img.replaceWith(gone);
+  }));
   $("log").appendChild(el);
   $("scroll").scrollTop = $("scroll").scrollHeight;
   return el;
+}
+
+// Why a tool was blocked, and how to change it. Otherwise the agent just
+// claims it is "pending your permission" and there is nothing to click.
+function deniedHtml(data) {
+  return data.reason === "ungranted"
+    // The tool is not denied, just not granted. It belongs in the
+    // allowlist; the denylist has nothing to do with it.
+    ? `<b>${esc(data.name || "That tool")}</b> is not in the chat agent's tool list, so the turn ` +
+      `stalled waiting for an approval this page cannot give. Add it to ` +
+      `<code>CLAUDE_JEV_AGENT_TOOLS</code> (space-separated) and restart claude-jev.`
+    : data.reason === "path"
+    // The tool is allowed; the location is not. Edits auto-approve only
+    // inside the working directory, and a browser cannot approve more.
+    ? `Outside the agent's working directory, so the write stalled waiting for a ` +
+      `permission this page cannot grant.<br><code>${esc(data.path || "")}</code><br>` +
+      `Add its folder to <code>CLAUDE_JEV_AGENT_DIRS</code> (semicolon-separated) or point ` +
+      `<code>CLAUDE_JEV_AGENT_CWD</code> at it, then restart claude-jev.`
+    : `<b>${esc(data.name || "That tool")}</b> is disabled for the chat agent, so this turn ` +
+      `cannot complete. To allow it, change <code>CLAUDE_JEV_AGENT_DENY</code> ` +
+      `(empty allows everything) and <code>CLAUDE_JEV_AGENT_TOOLS</code>, then restart claude-jev.`;
+}
+
+function routedBadge(data) {
+  const badge = document.createElement("div");
+  badge.className = "routed";
+  const conf = data.confidence != null ? " · p=" + data.confidence.toFixed(2) : "";
+  badge.innerHTML = `<span class="badge ${tierClass(data.tier)}">${esc(data.tier || "?")}</span>` +
+    `<span>${esc(data.model)}${conf}</span>`;
+  return badge;
+}
+
+const uploadUrl = (path) => api("/api/uploads/" + encodeURIComponent(String(path).split(/[\\/]/).pop()));
+
+/** Draw a saved chat, turn by turn, the way it looked live. */
+function renderChat(messages) {
+  $("log").innerHTML = messages.length ? "" : WELCOME;
+  for (const m of messages) {
+    if (m.role === "user") {
+      bubble("user", m.text || "(image)", null, (m.images || []).map(uploadUrl));
+      continue;
+    }
+    const holder = bubble("assistant", m.error && !m.text ? m.error : m.text, m.error && !m.text ? "err" : "");
+    const body = holder.querySelector(".bubble");
+    if (m.model) holder.insertBefore(routedBadge(m), body);
+    for (const d of m.denied || []) {
+      const warn = document.createElement("div");
+      warn.className = "denied";
+      warn.innerHTML = deniedHtml(d);
+      holder.insertBefore(warn, body);
+    }
+  }
+  $("scroll").scrollTop = $("scroll").scrollHeight;
+}
+
+async function openChat(id) {
+  chatId = id;
+  localStorage.setItem(CURRENT_KEY, id);
+  try {
+    const r = await fetch(api("/api/chats/" + id));
+    renderChat(r.ok ? (await r.json()).messages : []);
+  } catch {
+    renderChat([]);
+  }
+}
+
+function startNewChat() {
+  chatId = newId();
+  localStorage.setItem(CURRENT_KEY, chatId);
+  $("log").innerHTML = WELCOME;
+  $("input").focus();
+}
+
+const when = (iso) => {
+  const d = new Date(iso);
+  const sameDay = d.toDateString() === new Date().toDateString();
+  return sameDay ? d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : d.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+};
+
+async function renderDrawer() {
+  let chats = [];
+  try {
+    const r = await fetch(api("/api/chats"));
+    if (r.ok) chats = (await r.json()).chats || [];
+  } catch { /* shown as empty */ }
+  $("drawer").innerHTML = chats.length
+    ? chats.map((c) =>
+        `<div class="chat-row${c.id === chatId ? " on" : ""}" data-id="${esc(c.id)}">` +
+        `<div class="t"><div class="title">${esc(c.title)}</div>` +
+        `<div class="when">${esc(when(c.updated))} · ${c.turns} ${c.turns === 1 ? "message" : "messages"}</div></div>` +
+        `<button class="del" data-id="${esc(c.id)}" data-title="${esc(c.title)}" title="Delete this chat">Delete</button></div>`,
+      ).join("")
+    : `<div class="none">No saved chats yet.</div>`;
+}
+
+function setDrawer(open) {
+  $("drawer").hidden = !open;
+  $("chats").setAttribute("aria-expanded", String(open));
+  if (open) renderDrawer();
 }
 
 function setStreaming(on) {
@@ -343,26 +484,9 @@ async function send() {
         if (ev[1] === "backend") {
           $("backend").textContent = data.backend === "agent" ? "via claude code" : "via api";
         } else if (ev[1] === "denied") {
-          // Say why, and how to change it. Otherwise the agent just claims it
-          // is "pending your permission" and there is nothing to click.
           const warn = document.createElement("div");
           warn.className = "denied";
-          warn.innerHTML = data.reason === "ungranted"
-            // The tool is not denied, just not granted. It belongs in the
-            // allowlist; the denylist has nothing to do with it.
-            ? `<b>${esc(data.name || "That tool")}</b> is not in the chat agent's tool list, so the turn ` +
-              `stalled waiting for an approval this page cannot give. Add it to ` +
-              `<code>CLAUDE_JEV_AGENT_TOOLS</code> (space-separated) and restart claude-jev.`
-            : data.reason === "path"
-            // The tool is allowed; the location is not. Edits auto-approve only
-            // inside the working directory, and a browser cannot approve more.
-            ? `Outside the agent's working directory, so the write stalled waiting for a ` +
-              `permission this page cannot grant.<br><code>${esc(data.path || "")}</code><br>` +
-              `Add its folder to <code>CLAUDE_JEV_AGENT_DIRS</code> (semicolon-separated) or point ` +
-              `<code>CLAUDE_JEV_AGENT_CWD</code> at it, then restart claude-jev.`
-            : `<b>${esc(data.name || "That tool")}</b> is disabled for the chat agent, so this turn ` +
-              `cannot complete. To allow it, change <code>CLAUDE_JEV_AGENT_DENY</code> ` +
-              `(empty allows everything) and <code>CLAUDE_JEV_AGENT_TOOLS</code>, then restart claude-jev.`;
+          warn.innerHTML = deniedHtml(data);
           holder.insertBefore(warn, body);
         } else if (ev[1] === "tool") {
           // One status line that changes, rather than a line per tool call —
@@ -370,12 +494,7 @@ async function send() {
           steps++;
           setStatus(VERB[data.name] || "Working", steps);
         } else if (ev[1] === "routed") {
-          const badge = document.createElement("div");
-          badge.className = "routed";
-          const conf = data.confidence != null ? " · p=" + data.confidence.toFixed(2) : "";
-          badge.innerHTML = `<span class="badge ${tierClass(data.tier)}">${esc(data.tier || "?")}</span>` +
-            `<span>${esc(data.model)}${conf}</span>`;
-          holder.insertBefore(badge, body);
+          holder.insertBefore(routedBadge(data), body);
         } else if (ev[1] === "delta") {
           clearStatus();          // the answer is arriving; stop narrating
           body.classList.add("caret");
@@ -417,15 +536,38 @@ $("input").addEventListener("input", (e) => {
   e.target.style.height = "auto";
   e.target.style.height = Math.min(220, e.target.scrollHeight) + "px";
 });
-$("clear").addEventListener("click", async (e) => {
+// Switching mid-reply would pour the rest of it into the wrong chat.
+$("newChat").addEventListener("click", (e) => {
   e.preventDefault();
   if (streaming) return;
-  $("log").innerHTML = `<div class="welcome" id="welcome"><span class="serif">Ask it something.</span>Routed by Jev, recorded on the dashboard. Type <code>/</code> for your skills.</div>`;
-  await fetch(api("/api/chat/reset"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Jev-Token": TOKEN },
-    body: JSON.stringify({ id: chatId }),
-  }).catch(() => {});
+  setDrawer(false);
+  startNewChat();
+});
+$("chats").addEventListener("click", (e) => {
+  e.preventDefault();
+  setDrawer($("drawer").hidden);
+});
+document.addEventListener("click", (e) => {
+  if (!$("drawer").hidden && !e.target.closest("#drawer, #chats")) setDrawer(false);
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !$("drawer").hidden) setDrawer(false);
+});
+$("drawer").addEventListener("click", async (e) => {
+  const del = e.target.closest(".del");
+  if (del) {
+    e.stopPropagation();
+    if (streaming && del.dataset.id === chatId) return;
+    if (!confirm(`Delete "${del.dataset.title}"?\n\nThis removes the chat and its saved conversation. It cannot be undone.`)) return;
+    const r = await fetch(api("/api/chats/" + del.dataset.id), { method: "DELETE", headers: { "X-Jev-Token": TOKEN } }).catch(() => null);
+    if (!r?.ok) return alert("Could not delete that chat.");
+    if (del.dataset.id === chatId) startNewChat();
+    return renderDrawer();
+  }
+  const row = e.target.closest(".chat-row");
+  if (!row || streaming) return;
+  setDrawer(false);
+  if (row.dataset.id !== chatId) await openChat(row.dataset.id);
 });
 
 // ── Pasted images ──────────────────────────────────────────────────────────
@@ -580,6 +722,7 @@ $("input").addEventListener("blur", () => setTimeout(closeMenu, 120));
 
 loadSkills();
 probe();
+openChat(chatId);
 $("input").focus();
 </script>
 </body>

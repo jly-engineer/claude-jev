@@ -8,6 +8,7 @@ import { join } from "node:path";
 // Keep the dashboard off the real ledger.
 const dir = mkdtempSync(join(tmpdir(), "claude-jev-web-"));
 process.env.CLAUDE_JEV_LEDGER_PATH = join(dir, "usage.jsonl");
+process.env.CLAUDE_JEV_CHAT_DIR = join(dir, "chats");
 // Chat must report unavailable regardless of the developer's own environment.
 delete process.env.ANTHROPIC_API_KEY;
 delete process.env.ANTHROPIC_AUTH_TOKEN;
