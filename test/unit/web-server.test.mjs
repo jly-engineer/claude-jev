@@ -210,20 +210,16 @@ test("the chat header carries the title and names no backend", async () => {
   assert.ok(!main.includes("<h1>"), "and nowhere else");
 });
 
-test("the header shares the log's column, so the title lines up with the replies", async () => {
+test("only the title is offset; the rest of the bar keeps the window's edge", async () => {
   const html = await (await get("/chat")).text();
 
-  const width = (sel) => {
-    const rule = html.match(new RegExp(`\\${sel}\\s*{[^}]*}`))[0];
-    return {
-      max: (rule.match(/max-width:\s*([^;]+);/) || [])[1]?.trim(),
-      pad: (rule.match(/padding:\s*([^;]+);/) || [])[1]?.trim(),
-    };
-  };
-  const head = width(".headinner");
-  const log = width(".log");
+  const brand = html.match(/\.brand \{[^}]*\}/)[0];
+  assert.match(brand, /margin-left:\s*max\(0px,/, "the title is nudged to the log's column");
+  assert.ok(brand.includes("860px"), "by the column's own width");
 
-  assert.equal(head.max, log.max, "same column width");
-  assert.ok(head.pad.includes("clamp(20px, 5vw, 32px)"), "same horizontal padding as the log");
-  assert.ok(log.pad.includes("clamp(20px, 5vw, 32px)"));
+  // The bar itself must not be pulled in with it -- that moved the links and
+  // New chat off the window edge, and detached the drawer from History.
+  const header = html.match(/\nheader \{[^}]*\}/)[0];
+  assert.match(header, /padding:\s*22px clamp\(20px, 5vw, 56px\)/, "header keeps its own padding");
+  assert.ok(!html.includes("headinner"), "no column wrapper around the whole bar");
 });
