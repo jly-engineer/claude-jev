@@ -202,8 +202,22 @@ test("the chat header leads with the wordmark and names no backend", async () =>
   assert.ok(!/via claude code|via api/.test(html), "the backend label is gone from the header");
   assert.ok(!html.includes('id="backend"'), "and so is the element it was written into");
 
-  const brand = html.match(/<div class="brand">[\s\S]*?<\/div>\s*<\/div>/);
-  assert.ok(brand, "the header opens with a brand cluster");
-  assert.ok(brand[0].includes("joetechninja"), "the wordmark sits in it, on the left");
-  assert.ok(brand[0].includes("<h1>Chat</h1>"), "alongside the title");
+  const header = html.match(/<header>[\s\S]*?<\/header>/)[0];
+  assert.ok(header.includes("joetechninja"), "the wordmark leads the header");
+  assert.ok(!header.includes("<h1>"), "the title no longer lives there");
+});
+
+test("the title sits above the messages, outside the log that gets rewritten", async () => {
+  const html = await (await get("/chat")).text();
+
+  const main = html.match(/<main id="scroll">[\s\S]*?<\/main>/)[0];
+  const title = main.indexOf('class="pagetitle"');
+  const log = main.indexOf('id="log"');
+  assert.ok(title > -1, "the title is in the scroll area");
+  assert.ok(title < log, "and above the log");
+
+  // newChat() and openChat() both reassign $("log").innerHTML. A title placed
+  // inside the log would survive exactly until the first New chat.
+  const logBlock = main.slice(log);
+  assert.ok(!logBlock.includes('class="pagetitle"'), "so it must not be inside the log");
 });

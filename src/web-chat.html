@@ -48,13 +48,14 @@ header {
   display: flex; align-items: center; justify-content: space-between; gap: 24px;
   padding: 22px clamp(20px, 5vw, 56px); border-bottom: 1px solid var(--line);
 }
-header h1 {
+/* Shares the log's width and padding so it sits on the same left edge as the
+   messages below it, rather than on the window's. */
+.pagetitle { max-width: 860px; margin: 0 auto; padding: 34px clamp(20px, 5vw, 32px) 0; }
+.pagetitle h1 {
   font-family: Newsreader, serif; font-weight: 700; color: #fff;
   font-size: 28px; line-height: 1; letter-spacing: -0.035em;
 }
-header .hand { font-size: 17px; display: block; margin-bottom: 2px; }
-.brand { display: flex; align-items: flex-end; gap: 16px; min-width: 0; }
-.brand .wordmark { padding-bottom: 3px; }
+.pagetitle .hand { font-size: 17px; display: block; margin-bottom: 2px; }
 .meta { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-left: auto; }
 .actions { display: flex; align-items: center; gap: 10px; }
 .menubtn { display: none; }
@@ -68,7 +69,7 @@ header .hand { font-size: 17px; display: block; margin-bottom: 2px; }
 main { position: relative; z-index: 2; flex: 1 1 auto; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.12) transparent; }
 main::-webkit-scrollbar { width: 9px; }
 main::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 100px; }
-.log { max-width: 860px; margin: 0 auto; padding: 40px clamp(20px, 5vw, 32px) 32px; display: flex; flex-direction: column; gap: 26px; }
+.log { max-width: 860px; margin: 0 auto; padding: 22px clamp(20px, 5vw, 32px) 32px; display: flex; flex-direction: column; gap: 26px; }
 
 .msg { display: flex; flex-direction: column; gap: 8px; max-width: 86%; }
 .msg.me { align-self: flex-end; align-items: flex-end; }
@@ -239,8 +240,9 @@ textarea::placeholder { color: rgba(240,238,233,0.25); }
     padding: max(10px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left));
     gap: 12px;
   }
-  header .hand { display: none; }
-  header h1 { font-size: 22px; }
+  .pagetitle { padding: 20px max(14px, env(safe-area-inset-left)) 0 max(14px, env(safe-area-inset-left)); }
+  .pagetitle h1 { font-size: 22px; }
+  .pagetitle .hand { font-size: 15px; }
 
   /* Secondary links fold into a menu under the ☰ button. */
   .menubtn {
@@ -305,13 +307,7 @@ textarea::placeholder { color: rgba(240,238,233,0.25); }
 <div class="grain"></div>
 
 <header>
-  <div class="brand">
-    <div>
-      <span class="hand">talk to it</span>
-      <h1>Chat</h1>
-    </div>
-    <a class="wordmark" href="https://joetechninja.com" target="_blank" rel="noopener" aria-label="joetechninja.com"><b>joetechninja</b><span>.com</span></a>
-  </div>
+  <a class="wordmark" href="https://joetechninja.com" target="_blank" rel="noopener" aria-label="joetechninja.com"><b>joetechninja</b><span>.com</span></a>
   <div class="meta" id="meta">
     <a class="backlink" href="/" id="back">Dashboard</a>
     <a class="backlink" href="#" id="chats" aria-expanded="false" aria-controls="drawer">History</a>
@@ -324,6 +320,10 @@ textarea::placeholder { color: rgba(240,238,233,0.25); }
 </header>
 
 <main id="scroll">
+  <div class="pagetitle">
+    <span class="hand">talk to it</span>
+    <h1>Chat</h1>
+  </div>
   <div class="log" id="log">
     <div class="welcome" id="welcome">
       <span class="serif">Ask it something.</span>
