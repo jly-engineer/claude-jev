@@ -46,16 +46,26 @@ header {
   /* Above main (z-index 2), or the chats drawer opens underneath the log. */
   position: relative; z-index: 3; flex: 0 0 auto;
   display: flex; align-items: center; justify-content: space-between; gap: 24px;
-  padding: 22px clamp(20px, 5vw, 56px); border-bottom: 1px solid var(--line);
+  --hpad: 22px;
+  padding: var(--hpad) 0; border-bottom: 1px solid var(--line);
 }
-/* Shares the log's width and padding so it sits on the same left edge as the
-   messages below it, rather than on the window's. */
-.pagetitle { max-width: 860px; margin: 0 auto; padding: 34px clamp(20px, 5vw, 32px) 0; }
-.pagetitle h1 {
+/* The header bar spans the window, but its contents share the log's column,
+   so "Chat" starts on the same left edge as the replies underneath it. */
+.headinner {
+  /* Positioned, so the chats drawer and the phone menu hang off the column's
+     right edge rather than the window's -- otherwise they detach from the
+     links that open them on a wide screen. */
+  position: relative;
+  width: 100%; max-width: 860px; margin: 0 auto; padding: 0 clamp(20px, 5vw, 32px);
+  display: flex; align-items: center; justify-content: space-between; gap: 24px;
+}
+.brand { display: flex; align-items: flex-end; gap: 16px; min-width: 0; }
+.brand .wordmark { padding-bottom: 3px; }
+.brand h1 {
   font-family: Newsreader, serif; font-weight: 700; color: #fff;
   font-size: 28px; line-height: 1; letter-spacing: -0.035em;
 }
-.pagetitle .hand { font-size: 17px; display: block; margin-bottom: 2px; }
+.brand .hand { font-size: 17px; display: block; margin-bottom: 2px; }
 .meta { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-left: auto; }
 .actions { display: flex; align-items: center; gap: 10px; }
 .menubtn { display: none; }
@@ -69,7 +79,7 @@ header {
 main { position: relative; z-index: 2; flex: 1 1 auto; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.12) transparent; }
 main::-webkit-scrollbar { width: 9px; }
 main::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 100px; }
-.log { max-width: 860px; margin: 0 auto; padding: 22px clamp(20px, 5vw, 32px) 32px; display: flex; flex-direction: column; gap: 26px; }
+.log { max-width: 860px; margin: 0 auto; padding: 40px clamp(20px, 5vw, 32px) 32px; display: flex; flex-direction: column; gap: 26px; }
 
 .msg { display: flex; flex-direction: column; gap: 8px; max-width: 86%; }
 .msg.me { align-self: flex-end; align-items: flex-end; }
@@ -188,7 +198,7 @@ textarea::placeholder { color: rgba(240,238,233,0.25); }
 
 /* ── Saved chats ── */
 .drawer {
-  position: absolute; top: calc(100% + 8px); right: clamp(20px, 5vw, 56px); z-index: 6;
+  position: absolute; top: calc(100% + var(--hpad) + 8px); right: clamp(20px, 5vw, 32px); z-index: 6;
   width: min(380px, calc(100vw - 40px)); max-height: 60vh; overflow-y: auto;
   background: var(--surface); border: 1px solid rgba(212,163,115,0.25); border-radius: 22px;
   box-shadow: 0 40px 70px -30px rgba(0,0,0,0.85);
@@ -240,9 +250,9 @@ textarea::placeholder { color: rgba(240,238,233,0.25); }
     padding: max(10px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left));
     gap: 12px;
   }
-  .pagetitle { padding: 20px max(14px, env(safe-area-inset-left)) 0 max(14px, env(safe-area-inset-left)); }
-  .pagetitle h1 { font-size: 22px; }
-  .pagetitle .hand { font-size: 15px; }
+  .headinner { padding: 0 max(14px, env(safe-area-inset-left)) 0 max(14px, env(safe-area-inset-left)); gap: 12px; }
+  .brand .hand { display: none; }
+  .brand h1 { font-size: 22px; }
 
   /* Secondary links fold into a menu under the ☰ button. */
   .menubtn {
@@ -261,7 +271,7 @@ textarea::placeholder { color: rgba(240,238,233,0.25); }
   header.menu-open .menubtn span::after { transform: translateY(-6px) rotate(-45deg); }
 
   .meta {
-    display: none; position: absolute; top: calc(100% + 6px); right: max(14px, env(safe-area-inset-right)); z-index: 7;
+    display: none; position: absolute; top: calc(100% + var(--hpad) + 6px); right: max(14px, env(safe-area-inset-right)); z-index: 7;
     min-width: 220px; flex-direction: column; align-items: stretch; gap: 0; padding: 6px 0;
     background: var(--surface); border: 1px solid rgba(212,163,115,0.25); border-radius: 18px;
     box-shadow: 0 40px 70px -30px rgba(0,0,0,0.85);
@@ -307,23 +317,27 @@ textarea::placeholder { color: rgba(240,238,233,0.25); }
 <div class="grain"></div>
 
 <header>
-  <a class="wordmark" href="https://joetechninja.com" target="_blank" rel="noopener" aria-label="joetechninja.com"><b>joetechninja</b><span>.com</span></a>
-  <div class="meta" id="meta">
-    <a class="backlink" href="/" id="back">Dashboard</a>
-    <a class="backlink" href="#" id="chats" aria-expanded="false" aria-controls="drawer">History</a>
+  <div class="headinner">
+    <div class="brand">
+      <div>
+        <span class="hand">talk to it</span>
+        <h1>Chat</h1>
+      </div>
+      <a class="wordmark" href="https://joetechninja.com" target="_blank" rel="noopener" aria-label="joetechninja.com"><b>joetechninja</b><span>.com</span></a>
+    </div>
+    <div class="meta" id="meta">
+      <a class="backlink" href="/" id="back">Dashboard</a>
+      <a class="backlink" href="#" id="chats" aria-expanded="false" aria-controls="drawer">History</a>
+    </div>
+    <div class="actions">
+      <a class="send newchat" href="#" id="newChat">New chat</a>
+      <button class="menubtn" id="menuBtn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="meta"><span></span></button>
+    </div>
+    <div class="drawer" id="drawer" hidden></div>
   </div>
-  <div class="actions">
-    <a class="send newchat" href="#" id="newChat">New chat</a>
-    <button class="menubtn" id="menuBtn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="meta"><span></span></button>
-  </div>
-  <div class="drawer" id="drawer" hidden></div>
 </header>
 
 <main id="scroll">
-  <div class="pagetitle">
-    <span class="hand">talk to it</span>
-    <h1>Chat</h1>
-  </div>
   <div class="log" id="log">
     <div class="welcome" id="welcome">
       <span class="serif">Ask it something.</span>

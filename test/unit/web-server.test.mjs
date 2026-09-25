@@ -196,28 +196,34 @@ test("the chat page offers routing tips, collapsed by default", async () => {
   assert.ok(/Length words do not move it/.test(html), "and the thing that does not work");
 });
 
-test("the chat header leads with the wordmark and names no backend", async () => {
+test("the chat header carries the title and names no backend", async () => {
   const html = await (await get("/chat")).text();
 
-  assert.ok(!/via claude code|via api/.test(html), "the backend label is gone from the header");
+  assert.ok(!/via claude code|via api/.test(html), "the backend label is gone");
   assert.ok(!html.includes('id="backend"'), "and so is the element it was written into");
 
   const header = html.match(/<header>[\s\S]*?<\/header>/)[0];
-  assert.ok(header.includes("joetechninja"), "the wordmark leads the header");
-  assert.ok(!header.includes("<h1>"), "the title no longer lives there");
-});
-
-test("the title sits above the messages, outside the log that gets rewritten", async () => {
-  const html = await (await get("/chat")).text();
+  assert.ok(header.includes("<h1>Chat</h1>"), "the title lives in the header");
+  assert.ok(header.includes("joetechninja"), "with the wordmark beside it");
 
   const main = html.match(/<main id="scroll">[\s\S]*?<\/main>/)[0];
-  const title = main.indexOf('class="pagetitle"');
-  const log = main.indexOf('id="log"');
-  assert.ok(title > -1, "the title is in the scroll area");
-  assert.ok(title < log, "and above the log");
+  assert.ok(!main.includes("<h1>"), "and nowhere else");
+});
 
-  // newChat() and openChat() both reassign $("log").innerHTML. A title placed
-  // inside the log would survive exactly until the first New chat.
-  const logBlock = main.slice(log);
-  assert.ok(!logBlock.includes('class="pagetitle"'), "so it must not be inside the log");
+test("the header shares the log's column, so the title lines up with the replies", async () => {
+  const html = await (await get("/chat")).text();
+
+  const width = (sel) => {
+    const rule = html.match(new RegExp(`\\${sel}\\s*{[^}]*}`))[0];
+    return {
+      max: (rule.match(/max-width:\s*([^;]+);/) || [])[1]?.trim(),
+      pad: (rule.match(/padding:\s*([^;]+);/) || [])[1]?.trim(),
+    };
+  };
+  const head = width(".headinner");
+  const log = width(".log");
+
+  assert.equal(head.max, log.max, "same column width");
+  assert.ok(head.pad.includes("clamp(20px, 5vw, 32px)"), "same horizontal padding as the log");
+  assert.ok(log.pad.includes("clamp(20px, 5vw, 32px)"));
 });
