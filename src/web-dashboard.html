@@ -314,7 +314,7 @@ function paintCaps(usage) {
     return `<div class="row">
       <span class="label">${esc(name)}</span>
       <span class="track"><span class="fill ${cls}" style="width:${p.toFixed(1)}%"></span></span>
-      <span class="amt">${p.toFixed(0)}% &middot; ${esc(reset)}</span>
+      <span class="amt">${p.toFixed(0)}%${reset ? " &middot; " + esc(reset) : ""}</span>
     </div>`;
   }).join("");
 }

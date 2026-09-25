@@ -33,19 +33,23 @@ export function captureFromHeaders(headers) {
   const r7 = get("anthropic-ratelimit-unified-7d-reset");
   const s7 = get("anthropic-ratelimit-unified-7d-status");
 
-  // Only update if we actually got headers (subscription login only)
-  if (h5 != null) {
-    state.fiveHour.utilization = parseFloat(h5);
-    state.fiveHour.resetAt = r5 ? parseInt(r5, 10) : null;
-    state.fiveHour.status = s5 ?? null;
-    state.lastUpdated = Date.now();
-  }
-  if (h7 != null) {
-    state.sevenDay.utilization = parseFloat(h7);
-    state.sevenDay.resetAt = r7 ? parseInt(r7, 10) : null;
-    state.sevenDay.status = s7 ?? null;
-    state.lastUpdated = Date.now();
-  }
+  // Only update if we actually got headers (subscription login only). A header
+  // that is present but unparseable is dropped rather than stored: NaN survives
+  // the `!= null` check the dashboard filters on, so it would paint a gauge of
+  // width NaN instead of falling back to the "no usage data yet" copy.
+  applyHeader(state.fiveHour, h5, r5, s5);
+  applyHeader(state.sevenDay, h7, r7, s7);
+}
+
+function applyHeader(target, utilization, reset, status) {
+  if (utilization == null) return;
+  const u = parseFloat(utilization);
+  if (!Number.isFinite(u)) return;
+  const at = parseInt(reset, 10);
+  target.utilization = u;
+  target.resetAt = Number.isFinite(at) ? at : null;
+  target.status = status ?? null;
+  state.lastUpdated = Date.now();
 }
 
 /**
@@ -65,9 +69,9 @@ export function captureFromRateLimitEvent(info) {
   if (!windows) return;
 
   const apply = (target, w, status) => {
-    if (!w || typeof w.utilization !== "number") return;
+    if (!w || !Number.isFinite(w.utilization)) return;
     target.utilization = w.utilization;
-    target.resetAt = typeof w.resetsAt === "number" ? w.resetsAt : null;
+    target.resetAt = Number.isFinite(w.resetsAt) ? w.resetsAt : null;
     target.status = status ?? target.status ?? null;
     state.lastUpdated = Date.now();
   };
@@ -77,8 +81,38 @@ export function captureFromRateLimitEvent(info) {
 }
 
 /**
- * Get current usage state for the dashboard.
+ * A window whose reset time has passed has already rolled over: the quota is
+ * fresh and utilization is back to zero. Nothing tells us that happened —
+ * state only moves when a response comes back through the proxy or the agent —
+ * so a quiet stretch left the last captured value standing indefinitely and the
+ * dashboard kept showing a cap that expired hours ago. Restarting the process
+ * cleared the module state, which is the only reason a restart appeared to fix
+ * it. Age the windows out at read time instead.
  */
-export function getUsageState() {
-  return { ...state };
+function windowView(w, nowSeconds) {
+  if (w.resetAt != null && nowSeconds >= w.resetAt) {
+    return { utilization: 0, resetAt: null, status: null };
+  }
+  return { ...w };
+}
+
+/**
+ * Get current usage state for the dashboard. `now` is injectable for tests.
+ */
+export function getUsageState(now = Date.now()) {
+  const nowSeconds = Math.floor(now / 1000);
+  return {
+    fiveHour: windowView(state.fiveHour, nowSeconds),
+    sevenDay: windowView(state.sevenDay, nowSeconds),
+    lastUpdated: state.lastUpdated,
+  };
+}
+
+/**
+ * Drop all captured usage. Exported for tests.
+ */
+export function resetUsageState() {
+  state.fiveHour = { utilization: null, resetAt: null, status: null };
+  state.sevenDay = { utilization: null, resetAt: null, status: null };
+  state.lastUpdated = null;
 }
