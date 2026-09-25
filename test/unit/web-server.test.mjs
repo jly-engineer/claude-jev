@@ -195,3 +195,15 @@ test("the chat page offers routing tips, collapsed by default", async () => {
   assert.ok(/transcribe/i.test(html), "names the case that sends people looking");
   assert.ok(/Length words do not move it/.test(html), "and the thing that does not work");
 });
+
+test("the chat header leads with the wordmark and names no backend", async () => {
+  const html = await (await get("/chat")).text();
+
+  assert.ok(!/via claude code|via api/.test(html), "the backend label is gone from the header");
+  assert.ok(!html.includes('id="backend"'), "and so is the element it was written into");
+
+  const brand = html.match(/<div class="brand">[\s\S]*?<\/div>\s*<\/div>/);
+  assert.ok(brand, "the header opens with a brand cluster");
+  assert.ok(brand[0].includes("joetechninja"), "the wordmark sits in it, on the left");
+  assert.ok(brand[0].includes("<h1>Chat</h1>"), "alongside the title");
+});

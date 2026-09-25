@@ -53,13 +53,14 @@ header h1 {
   font-size: 28px; line-height: 1; letter-spacing: -0.035em;
 }
 header .hand { font-size: 17px; display: block; margin-bottom: 2px; }
+.brand { display: flex; align-items: flex-end; gap: 16px; min-width: 0; }
+.brand .wordmark { padding-bottom: 3px; }
 .meta { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-left: auto; }
 .actions { display: flex; align-items: center; gap: 10px; }
 .menubtn { display: none; }
-.backlink, .backend {
+.backlink {
   font-size: 11px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase;
 }
-.backend { color: rgba(240,238,233,0.3); }
 .backlink { color: rgba(140,163,145,0.8); border-bottom: 1px solid rgba(140,163,145,0.3); padding-bottom: 3px; }
 .backlink:hover { color: var(--paper); border-bottom-color: var(--clay); }
 
@@ -266,9 +267,6 @@ textarea::placeholder { color: rgba(240,238,233,0.25); }
   header.menu-open .meta { display: flex; }
   .meta > * { padding: 13px 20px; margin: 0; }
   .meta .backlink, .meta button.backlink { border-bottom: 0 !important; font-size: 12px; text-align: left; width: 100%; }
-  .meta .backend { order: 10; font-size: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
-  .meta .backend:empty { display: none; }
-  .meta .wordmark { order: 9; }
   /* The server build injects Log out as a form; match the links' metrics. */
   .meta form { display: block !important; }
   .meta form button { display: block !important; padding: 0 !important; font-size: 12px !important; line-height: 1.5 !important; }
@@ -307,13 +305,14 @@ textarea::placeholder { color: rgba(240,238,233,0.25); }
 <div class="grain"></div>
 
 <header>
-  <div>
-    <span class="hand">talk to it</span>
-    <h1>Chat</h1>
+  <div class="brand">
+    <div>
+      <span class="hand">talk to it</span>
+      <h1>Chat</h1>
+    </div>
+    <a class="wordmark" href="https://joetechninja.com" target="_blank" rel="noopener" aria-label="joetechninja.com"><b>joetechninja</b><span>.com</span></a>
   </div>
   <div class="meta" id="meta">
-    <span class="backend" id="backend"></span>
-    <a class="wordmark" href="https://joetechninja.com" target="_blank" rel="noopener" aria-label="joetechninja.com"><b>joetechninja</b><span>.com</span></a>
     <a class="backlink" href="/" id="back">Dashboard</a>
     <a class="backlink" href="#" id="chats" aria-expanded="false" aria-controls="drawer">History</a>
   </div>
@@ -391,7 +390,6 @@ async function probe() {
     if (!r.ok) throw new Error(r.status);
     const d = await r.json();
     chatReady = Boolean(d.chatReady);
-    if (d.backend) $("backend").textContent = d.backend === "agent" ? "via claude code" : "via api";
     if (d.agent) $("hint").textContent = (d.agent.writable ? "⚠ writable · " : "limited · ") + d.agent.tools + "  ·  " + [d.agent.cwd, ...(d.agent.dirs || [])].join("  +  ");
   } catch {
     chatReady = false;
@@ -604,9 +602,7 @@ async function send() {
         if (!ev || !dl) continue;
         const data = JSON.parse(dl[1]);
         const stick = atBottom();
-        if (ev[1] === "backend") {
-          $("backend").textContent = data.backend === "agent" ? "via claude code" : "via api";
-        } else if (ev[1] === "denied") {
+        if (ev[1] === "denied") {
           const warn = document.createElement("div");
           warn.className = "denied";
           warn.innerHTML = deniedHtml(data);
