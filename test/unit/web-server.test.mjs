@@ -183,3 +183,15 @@ test("the chat page wires up the slash typeahead", async () => {
 test("unknown api routes 404 rather than falling through to the page", async () => {
   assert.equal((await get(`/api/nope?t=${token}`)).status, 404);
 });
+
+test("the chat page offers routing tips, collapsed by default", async () => {
+  const html = await (await get("/chat")).text();
+
+  assert.ok(html.includes('class="tips"'), "the tips box is on the chat page");
+  assert.ok(!/<details class="tips"[^>]*\bopen\b/.test(html),
+    "collapsed by default — it must not push the composer down on arrival");
+  // The advice has to match what the router actually does, or it is worse than
+  // no advice: transcription reads as mechanical and lands on the cheap tier.
+  assert.ok(/transcribe/i.test(html), "names the case that sends people looking");
+  assert.ok(/Length words do not move it/.test(html), "and the thing that does not work");
+});
