@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { isAuto, AUTO_MODEL, tierSpec, TIER_NAMES } from "./config.mjs";
-import { askJev, decide } from "./router.mjs";
+import { askJev, decide, slashFloor } from "./router.mjs";
 import { record } from "./ledger.mjs";
 import { cost, baselineCost, totalInputTokens, isPriced } from "./pricing.mjs";
 import { captureFromHeaders } from "./usage-state.mjs";
@@ -292,8 +292,9 @@ export async function startProxy() {
 
             if (prompt) {
               const previous = state.tier;
+              const floor = slashFloor(prompt);
               const jev = await askJev(prompt);
-              const { tier, reason } = decide({ jev, current: state.tier });
+              const { tier, reason } = decide({ jev, current: state.tier, floor });
               state.tier = tier;
               log(
                 `${jev ? `${jev.ms}ms p=${jev.confidence.toFixed(2)}` : "no-jev"} ` +

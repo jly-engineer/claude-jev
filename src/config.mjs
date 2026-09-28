@@ -110,3 +110,26 @@ export const THRESHOLDS = {
   jevDeadlineMs: 3000,
   jevMaxRetries: 1,
 };
+
+// ── Tier floors ─────────────────────────────────────────────────────────────
+// A floor raises the tier for work that is worth more than its difficulty
+// suggests. It only ever raises: if Jev asks for something larger, it keeps it.
+//
+// Invoking a command is the one signal of that kind the wrapper can read for
+// free. Someone who types /<command> has decided what they are doing, which is
+// a poor fit for the cheapest tier even when the words look mechanical.
+
+export const FLOORS = {
+  // Tier a prompt opening with /<command> floors to. `off`, or anything that
+  // is not a tier name, disables it.
+  slashTier: () => process.env.CLAUDE_JEV_FLOOR_SLASH || "sonnet",
+};
+
+/**
+ * A leading /<command>, as the chat and CLI both accept it.
+ *
+ * Anchored to the start and refused before a further slash, so a prompt that
+ * opens with an absolute path is not read as a command.
+ */
+const SLASH_RE = /^\s*\/([a-z0-9][a-z0-9:_-]*)(?!\/)(?:\s|$)/i;
+export const slashCommandOf = (text) => SLASH_RE.exec(text ?? "")?.[1]?.toLowerCase() ?? null;
