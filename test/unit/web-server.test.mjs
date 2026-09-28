@@ -223,3 +223,21 @@ test("only the title is offset; the rest of the bar keeps the window's edge", as
   assert.match(header, /padding:\s*22px clamp\(20px, 5vw, 56px\)/, "header keeps its own padding");
   assert.ok(!html.includes("headinner"), "no column wrapper around the whole bar");
 });
+
+test("PATCH /api/chats/:id renames, and rejects what is not a title", async () => {
+  const patch = (path, body) =>
+    fetch(url + path, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
+  assert.equal((await patch("/api/chats/chat-patch01", { title: "x" })).status, 401, "token still required");
+  assert.equal((await patch(`/api/chats/not-a-chat?t=${token}`, { title: "x" })).status, 400, "bad id");
+  assert.equal((await patch(`/api/chats/chat-patch01?t=${token}`, { title: 42 })).status, 400, "title must be a string");
+  assert.equal((await patch(`/api/chats/chat-patch01?t=${token}`, { title: "x" })).status, 404, "no such chat");
+});
+
+test("the chat drawer offers rename beside delete", async () => {
+  const html = await (await get("/chat")).text();
+  assert.ok(html.includes('class="ren"'), "a rename button per row");
+  assert.match(html, /method:\s*"PATCH"/, "wired to the rename route");
+  // The accent is --clay; --accent has never been a variable on this page.
+  assert.ok(!html.includes("var(--accent)"), "no undefined custom property");
+});

@@ -55,6 +55,27 @@ function titleFrom(messages) {
   return text.length > TITLE_MAX ? text.slice(0, TITLE_MAX - 1) + "…" : text;
 }
 
+/**
+ * Rename a chat. An empty title is not an error: it restores the one derived
+ * from the first message, so clearing the box undoes a rename rather than
+ * leaving "(untitled)" behind.
+ *
+ * Written directly instead of through saveChat(), which stamps `updated`.
+ * The drawer sorts on that, so renaming an old chat would jump it to the top.
+ * Returns the new title, or null if there is no such chat.
+ */
+export function renameChat(id, title) {
+  const chat = loadChat(id);
+  if (!chat) return null;
+  const clean = String(title ?? "").replace(/\s+/g, " ").trim();
+  chat.title =
+    (clean.length > TITLE_MAX ? clean.slice(0, TITLE_MAX - 1) + "\u2026" : clean) || titleFrom(chat.messages);
+  const tmp = `${fileFor(chat.id)}.${process.pid}.tmp`;
+  writeFileSync(tmp, JSON.stringify(chat));
+  renameSync(tmp, fileFor(chat.id));
+  return chat.title;
+}
+
 /** Summaries, most recently used first. Unreadable files are skipped. */
 export function listChats() {
   let names;

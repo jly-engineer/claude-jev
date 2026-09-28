@@ -9,7 +9,7 @@ process.env.CLAUDE_JEV_CHAT_DIR = join(dir, "chats");
 process.env.CLAUDE_CONFIG_DIR = join(dir, "claude");
 after(() => rmSync(dir, { recursive: true, force: true }));
 
-const { validChatId, newChat, saveChat, loadChat, listChats, deleteChat, deleteAgentTranscript } =
+const { validChatId, newChat, saveChat, loadChat, listChats, deleteChat, deleteAgentTranscript, renameChat } =
   await import("../../src/chats.mjs");
 
 const SESSION = "0f8fad5b-d9cb-469f-a165-70867728950e";
@@ -89,4 +89,36 @@ test("only a well-formed session id is ever used to delete", () => {
   assert.equal(deleteAgentTranscript("../../../etc"), 0);
   assert.equal(deleteAgentTranscript("*"), 0);
   assert.equal(deleteAgentTranscript(undefined), 0);
+});
+
+test("a renamed chat keeps its place in the list", async () => {
+  const chat = newChat("chat-rename01");
+  chat.messages.push({ role: "user", text: "Original question", images: [] });
+  saveChat(chat);
+  const before = loadChat("chat-rename01").updated;
+
+  await new Promise((r) => setTimeout(r, 5));
+  assert.equal(renameChat("chat-rename01", "  Log   rotation  "), "Log rotation");
+  const after = loadChat("chat-rename01");
+  assert.equal(after.title, "Log rotation");
+  // The drawer sorts on `updated`; renaming must not bump an old chat to the top.
+  assert.equal(after.updated, before);
+  assert.equal(after.messages.length, 1, "messages untouched");
+});
+
+test("an empty rename restores the title taken from the first message", () => {
+  const chat = newChat("chat-rename02");
+  chat.messages.push({ role: "user", text: "How do I rotate the logs?", images: [] });
+  saveChat(chat);
+  renameChat("chat-rename02", "Something else");
+  assert.equal(renameChat("chat-rename02", "   "), "How do I rotate the logs?");
+});
+
+test("a renamed title is capped, and an unknown chat reports itself", () => {
+  const chat = newChat("chat-rename03");
+  chat.messages.push({ role: "user", text: "hi", images: [] });
+  saveChat(chat);
+  assert.ok(renameChat("chat-rename03", "x".repeat(300)).length <= 80);
+  assert.equal(renameChat("chat-missing1", "nope"), null);
+  assert.equal(renameChat("../evil", "nope"), null);
 });

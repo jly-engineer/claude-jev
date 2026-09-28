@@ -209,12 +209,13 @@ textarea::placeholder { color: rgba(240,238,233,0.25); }
 .chat-row .t { flex: 1; min-width: 0; }
 .chat-row .title { font-size: 13.5px; color: var(--paper); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-row .when { font-size: 10.5px; color: rgba(240,238,233,0.3); margin-top: 2px; }
-.chat-row .del {
+.chat-row .del, .chat-row .ren {
   border: 0; background: none; color: rgba(240,238,233,0.3); cursor: pointer;
   font-family: inherit; font-size: 10px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase;
   padding: 6px 8px; border-radius: 100px;
 }
 .chat-row .del:hover { color: #d98b72; background: rgba(180,85,63,0.12); }
+.chat-row .ren:hover { color: var(--clay); background: rgba(212,163,115,0.12); }
 .sent .gone { font-size: 11px; color: rgba(240,238,233,0.35); border: 1px dashed var(--line); border-radius: 12px; padding: 8px 12px; }
 
 .hint { max-width: 860px; margin: 0 auto; padding: 0 clamp(20px, 5vw, 32px) 16px; font-size: 11px; color: rgba(240,238,233,0.22); }
@@ -521,6 +522,7 @@ async function renderDrawer() {
         `<div class="chat-row${c.id === chatId ? " on" : ""}" data-id="${esc(c.id)}">` +
         `<div class="t"><div class="title">${esc(c.title)}</div>` +
         `<div class="when">${esc(when(c.updated))} · ${c.turns} ${c.turns === 1 ? "message" : "messages"}</div></div>` +
+        `<button class="ren" data-id="${esc(c.id)}" data-title="${esc(c.title)}" title="Rename this chat">Rename</button>` +
         `<button class="del" data-id="${esc(c.id)}" data-title="${esc(c.title)}" title="Delete this chat">Delete</button></div>`,
       ).join("")
     : `<div class="none">No saved chats yet.</div>`;
@@ -681,6 +683,21 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !$("drawer").hidden) setDrawer(false);
 });
 $("drawer").addEventListener("click", async (e) => {
+  const ren = e.target.closest(".ren");
+  if (ren) {
+    e.stopPropagation();
+    // Empty is allowed through: the server reads it as "go back to the title
+    // taken from the first message".
+    const title = prompt("Rename this chat:", ren.dataset.title);
+    if (title === null || title === ren.dataset.title) return;
+    const r = await fetch(api("/api/chats/" + ren.dataset.id), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "X-Jev-Token": TOKEN },
+      body: JSON.stringify({ title }),
+    }).catch(() => null);
+    if (!r?.ok) return alert("Could not rename that chat.");
+    return renderDrawer();
+  }
   const del = e.target.closest(".del");
   if (del) {
     e.stopPropagation();

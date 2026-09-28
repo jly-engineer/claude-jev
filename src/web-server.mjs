@@ -11,7 +11,7 @@ import { agentAvailable, newAgentSession, runAgentTurn, agentConfig } from "./ag
 import { TIER_NAMES, tierSpec } from "./config.mjs";
 import { listSkills } from "./skills.mjs";
 import { saveImage, pruneUploads, MAX_BYTES, UPLOAD_DIR } from "./uploads.mjs";
-import { validChatId, loadChat, newChat, saveChat, listChats, deleteChat } from "./chats.mjs";
+import { validChatId, loadChat, newChat, saveChat, listChats, deleteChat, renameChat } from "./chats.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const HTML_PATH = join(HERE, "web-dashboard.html");
@@ -178,6 +178,13 @@ export async function startDashboardServer(preferredPort = 0, opts = {}) {
         const chat = loadChat(id) ?? newChat(id);
         // Internal state (agent session, API history) stays server-side.
         return json(200, { id: chat.id, title: chat.title, created: chat.created, updated: chat.updated, messages: chat.messages });
+      }
+      if (req.method === "PATCH") {
+        const body = await readJson(req).catch(() => null);
+        if (!body || typeof body.title !== "string") return json(400, { error: "title must be a string" });
+        const title = renameChat(id, body.title);
+        if (title === null) return json(404, { error: "no such chat" });
+        return json(200, { ok: true, title });
       }
       if (req.method === "DELETE") {
         resetSession(id);
