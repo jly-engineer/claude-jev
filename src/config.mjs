@@ -12,7 +12,7 @@ export const TIERS = [
   {
     name: "sonnet",
     thinking: true,
-    id: "claude-sonnet-5",
+    id: "claude-sonnet-5-5",
     effort: "high",
   },
   {

@@ -221,7 +221,7 @@ Shell variables win over the file, so `CLAUDE_JEV_CHAT=off claude-jev` overrides
 | Tier | Model | When |
 |---|---|---|
 | **haiku** | `claude-haiku-4-5-20251001` | Typos, renames, lookups, mechanical edits |
-| **sonnet** | `claude-sonnet-5` | Implementations, tests, known bug fixes |
+| **sonnet** | `claude-sonnet-5-5` | Implementations, tests, known bug fixes |
 | **opus** | `claude-opus-5` | Unknown-cause debugging, multi-module design, security |
 
 Every error path keeps the current model: Jev unreachable or slow → no change; confidence below 0.6 → never downgrade, upgrades capped at sonnet; tool continuations → untouched.

@@ -13,7 +13,8 @@ test("dated and bare model ids price identically", () => {
 
 test("per-model base rates", () => {
   near(cost(HAIKU_DATED, { outputTokens: MTOK }), 5.0, "haiku output");
-  near(cost("claude-sonnet-5", { inputTokens: MTOK, outputTokens: MTOK }), 12.0, "sonnet 2 + 10");
+  near(cost("claude-sonnet-5", { inputTokens: MTOK, outputTokens: MTOK }), 12.0, "sonnet 5 2 + 10");
+  near(cost("claude-sonnet-5-5", { inputTokens: MTOK, outputTokens: MTOK }), 12.0, "sonnet 5.5 2 + 10");
   near(cost("claude-opus-4-6", { inputTokens: MTOK, outputTokens: MTOK }), 30.0, "opus 4.6 5 + 25");
   near(cost("claude-opus-5", { inputTokens: MTOK, outputTokens: MTOK }), 30.0, "opus 5 5 + 25");
 });
@@ -33,6 +34,7 @@ test("an unpriced model is costed at baseline rates, never zero", () => {
 test("known models report as priced", () => {
   assert.equal(isPriced(HAIKU_DATED), true);
   assert.equal(isPriced("claude-sonnet-5"), true);
+  assert.equal(isPriced("claude-sonnet-5-5"), true);
   assert.equal(isPriced(BASELINE_MODEL), true);
 });
 
