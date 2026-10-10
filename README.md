@@ -220,7 +220,7 @@ Shell variables win over the file, so `CLAUDE_JEV_CHAT=off claude-jev` overrides
 
 | Tier | Model | When |
 |---|---|---|
-| **haiku** | `claude-haiku-4-5-20251001` | Typos, renames, lookups, mechanical edits |
+| **haiku** | `claude-haiku-5-5` | Typos, renames, lookups, mechanical edits |
 | **sonnet** | `claude-sonnet-5-5` | Implementations, tests, known bug fixes |
 | **opus** | `claude-opus-5` | Unknown-cause debugging, multi-module design, security |
 

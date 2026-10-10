@@ -56,7 +56,7 @@ Proxy flow per request:
 
 | Tier   | Model                        | Effort | Thinking |
 |--------|------------------------------|--------|----------|
-| haiku  | claude-haiku-4-5-20251001    | null   | no       |
+| haiku  | claude-haiku-5-5             | null   | no       |
 | sonnet | claude-sonnet-5-5            | high   | yes      |
 | opus   | claude-opus-5                | high   | yes      |
 

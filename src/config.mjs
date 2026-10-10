@@ -6,7 +6,7 @@ export const TIERS = [
   {
     name: "haiku",
     thinking: false,
-    id: "claude-haiku-4-5-20251001",
+    id: "claude-haiku-5-5",
     effort: null,
   },
   {
