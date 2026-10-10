@@ -330,7 +330,7 @@ export async function startProxy() {
             // Non-messages endpoint (token counting, etc.) — just swap the sentinel
             // to a real model so the API doesn't reject it.
             const fallbackSpec = tierSpec("haiku");
-            body.model = fallbackSpec?.id ?? "claude-haiku-4-5-20251001";
+            body.model = fallbackSpec?.id ?? "claude-haiku-5-5";
             log(`sentinel rewrite on ${req.url}: ${body.model}`);
           }
         }
@@ -341,7 +341,7 @@ export async function startProxy() {
         // buffer so the API never sees "jev-auto".
         const raw = out.toString();
         if (raw.includes(AUTO_MODEL)) {
-          const fallbackId = tierSpec("haiku")?.id ?? "claude-haiku-4-5-20251001";
+          const fallbackId = tierSpec("haiku")?.id ?? "claude-haiku-5-5";
           out = Buffer.from(raw.replaceAll(AUTO_MODEL, fallbackId));
           log(`fallback sentinel scrub on error: ${err.message}`);
         } else {

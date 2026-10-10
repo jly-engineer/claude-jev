@@ -18,7 +18,7 @@ const at = (f) => { const i = a.indexOf(f); return i >= 0 ? a[i + 1] : null; };
 const id = at("--session-id") || at("--resume");
 const out = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
 out({ type: "system", subtype: "init", session_id: id });
-out({ type: "assistant", session_id: id, message: { model: "claude-haiku-4-5-20251001", content: [{ type: "text", text: "echo: " + at("-p") }] } });
+out({ type: "assistant", session_id: id, message: { model: "claude-haiku-5-5", content: [{ type: "text", text: "echo: " + at("-p") }] } });
 out({ type: "result", subtype: "success", is_error: false, session_id: id, total_cost_usd: 0.001 });
 `);
 chmodSync(join(bin, "claude"), 0o755);

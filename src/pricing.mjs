@@ -4,6 +4,7 @@
 // normalized before lookup, so both spellings price the same.
 const MODELS = {
   "claude-haiku-4-5": { input: 1.00, output: 5.00, label: "Haiku 4.5" },
+  "claude-haiku-5-5": { input: 0.10, output: 0.50, label: "Haiku 5.5" },
   "claude-sonnet-5-5": { input: 2.00, output: 10.00, label: "Sonnet 5.5" },
   "claude-sonnet-5":  { input: 2.00, output: 10.00, label: "Sonnet 5" },
   "claude-sonnet-4-6": { input: 3.00, output: 15.00, label: "Sonnet 4.6" },
