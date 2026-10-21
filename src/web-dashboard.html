@@ -16,11 +16,11 @@
   --ink:     #1a1d1c;
   --clay:    #d4a373;
   --sage:    #8ca391;
-  --shell:   64px;
+  --shell:   40px;
   --line:    rgba(255, 255, 255, 0.05);
 }
-@media (max-width: 1100px) { :root { --shell: 40px; } }
-@media (max-width: 680px)  { :root { --shell: 20px; } }
+@media (max-width: 1100px) { :root { --shell: 28px; } }
+@media (max-width: 680px)  { :root { --shell: 12px; } }
 
 *, *::before, *::after { box-sizing: border-box; }
 
@@ -53,59 +53,95 @@ a { color: var(--clay); text-decoration: none; }
 .num { font-family: Newsreader, serif; font-weight: 700; letter-spacing: -0.035em; line-height: 1; }
 
 /* ── Shell ── */
-.wrap { position: relative; z-index: 2; max-width: 1480px; margin: 0 auto; padding: 0 var(--shell) 96px; }
+.wrap { position: relative; z-index: 2; max-width: 1480px; margin: 0 auto; padding: 0 var(--shell) 24px; }
 
 header {
+  position: relative;
   display: flex; align-items: flex-end; justify-content: space-between;
-  gap: 32px; flex-wrap: wrap; padding: 56px 0 40px;
+  gap: 14px; flex-wrap: wrap; padding: 26px 0 14px; margin-bottom: 14px; border-bottom: 1px solid var(--line);
 }
+.conn .logout {
+  background: none; border: 0; padding: 4px 0 4px 12px; margin-left: 2px; cursor: pointer;
+  border-left: 1px solid var(--line); font: inherit; letter-spacing: 0.04em; color: rgba(240,238,233,0.55);
+}
+.conn .logout:hover { color: var(--paper); }
+.conn { position: absolute; top: 6px; right: 0; display: flex; align-items: center; gap: 8px; font-size: 12px; color: rgba(240,238,233,0.4); }
 header h1 {
   font-family: Newsreader, serif; font-weight: 700; color: #fff;
-  font-size: clamp(38px, 5vw, 66px); line-height: 0.9; letter-spacing: -0.045em;
+  font-size: clamp(30px, 4vw, 44px); line-height: 0.95; letter-spacing: -0.045em;
 }
-header .hand { font-size: 26px; display: block; margin-bottom: 6px; }
-.status { display: flex; align-items: center; gap: 18px; font-size: 12px; color: rgba(240,238,233,0.4); }
+header .hand { font-size: 19px; display: block; margin-bottom: 0; }
+.status { display: flex; align-items: center; gap: 14px; font-size: 12px; color: rgba(240,238,233,0.4); }
+/* The one thing this page is for: a filled button, not a text link. */
 .chatlink {
-  font-size: 11px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase;
-  color: rgba(140,163,145,0.85); border-bottom: 1px solid rgba(140,163,145,0.3); padding-bottom: 3px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 14px 30px; border-radius: 100px;
+  background: var(--clay); color: var(--ink);
+  font-size: 16px; font-weight: 700; letter-spacing: 0.02em;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
-.chatlink:hover { color: var(--paper); border-bottom-color: var(--clay); }
+.chatlink:hover { transform: translateY(-1px); }
+.chatlink:active { transform: translateY(0); }
+@media (max-width: 680px) {
+  header { flex-wrap: nowrap; }
+  .status { gap: 8px; flex-shrink: 0; }
+  .chatlink { padding: 9px 18px; font-size: 14px; }
+}
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--sage); box-shadow: 0 0 12px var(--sage); }
 .dot.stale { background: #b4553f; box-shadow: none; }
 
 /* ── Layout ── */
 .columns { display: block; }
 
-section { margin-bottom: 44px; }
-.section-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 22px; flex-wrap: wrap; }
+section { margin-bottom: 18px; }
+.section-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; flex-wrap: wrap; }
 .section-head h2 {
   font-family: Newsreader, serif; font-weight: 700; color: #fff;
-  font-size: clamp(26px, 3vw, 36px); line-height: 1; letter-spacing: -0.035em;
+  font-size: clamp(20px, 2.4vw, 26px); line-height: 1; letter-spacing: -0.035em;
 }
 
 /* ── Cards ── */
 .card {
   background: var(--surface); border: 1px solid var(--line);
-  box-shadow: 0 40px 70px -30px rgba(0, 0, 0, 0.7);
-  padding: 30px 30px 28px;
+  box-shadow: 0 24px 50px -30px rgba(0, 0, 0, 0.7);
+  padding: 14px 18px;
 }
-.summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
-@media (max-width: 860px) { .summary { grid-template-columns: 1fr; } }
-.summary .card:nth-child(1) { border-radius: 76px 24px 76px 24px; transform: rotate(-1.1deg); }
-.summary .card:nth-child(2) { border-radius: 24px 76px 24px 76px; transform: rotate(0.8deg); margin-top: 20px; }
-.summary .card:nth-child(3) { border-radius: 76px 76px 24px 76px; transform: rotate(-0.5deg); }
-@media (max-width: 860px) { .summary .card { transform: none !important; margin-top: 0 !important; } }
+.summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.summary .card:nth-child(1) { border-radius: 36px 12px 36px 12px; }
+.summary .card:nth-child(2) { border-radius: 12px 36px 12px 36px; }
+.summary .card:nth-child(3) { border-radius: 36px 36px 12px 36px; }
+@media (max-width: 680px) {
+  .summary { gap: 8px; }
+  .summary .card { padding: 10px 10px 12px; border-radius: 16px !important; }
+  /* One line each, or a wrapped label pushes its number out of line with the others. */
+  .summary .kicker { letter-spacing: 0.12em; font-size: 9px; white-space: nowrap; }
+  .summary .value { font-size: 22px; }
+  .summary .detail { font-size: 10.5px; line-height: 1.3; }
+  /* A phone shows the headline numbers; the breakdowns live on the desktop. */
+  .summary .card:nth-child(n+2) .detail { display: none; }
+  .x, .hm, .section-head .eyebrow { display: none; }
+  .tier-row { grid-template-columns: 70px 1fr; }
+  .tier-row .money { text-align: right; }
+  footer { justify-content: center; }
+}
 
-.summary .kicker { color: rgba(140,163,145,0.7); margin-bottom: 12px; }
-.summary .value { font-size: clamp(34px, 4vw, 52px); color: #fff; }
+.summary .kicker { color: rgba(140,163,145,0.7); margin-bottom: 6px; }
+.summary .value { font-size: clamp(26px, 3vw, 36px); color: #fff; }
 .summary .value.saved { color: var(--clay); }
-.summary .detail { font-size: 13px; color: rgba(240,238,233,0.42); margin-top: 10px; }
+.summary .detail { font-size: 12.5px; color: rgba(240,238,233,0.42); margin-top: 6px; }
 
-.panel { border-radius: 48px 20px 48px 20px; }
-.panel.alt { border-radius: 20px 48px 20px 48px; }
+.panel { border-radius: 28px 12px 28px 12px; }
+.panel.alt { border-radius: 12px 28px 12px 28px; }
 
 /* ── Bars ── */
-.row { display: grid; grid-template-columns: 96px 1fr auto; gap: 16px; align-items: center; padding: 13px 0; border-bottom: 1px solid var(--line); }
+.row { display: grid; grid-template-columns: 84px 1fr auto; gap: 6px 14px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.row .sub { grid-column: 1 / -1; font-size: 11.5px; color: rgba(240,238,233,0.4); margin-top: -2px; }
+.row .sub.warn { color: #d98b72; }
+@media (max-width: 680px) {
+  .row { grid-template-columns: 62px 1fr auto; gap: 4px 10px; }
+}
+.note { font-size: 11.5px; color: rgba(240,238,233,0.38); padding-top: 8px; }
+.note.warn { color: #d98b72; }
 .row:last-child { border-bottom: 0; }
 .row .label { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(240,238,233,0.45); }
 /* Both must be block: a bare inline <span> ignores width/height, so an empty
@@ -119,8 +155,9 @@ section { margin-bottom: 44px; }
 .row .amt b { color: var(--clay); font-weight: 700; }
 
 /* ── Tiers ── */
-.tiers { display: grid; gap: 14px; }
-.tier-row { display: grid; grid-template-columns: 90px 1fr auto; gap: 16px; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.tiers { display: grid; gap: 0; }
+.tier-row { display: grid; grid-template-columns: 90px 1fr auto; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+@media (max-width: 680px) { .tier-row { grid-template-columns: 70px 1fr auto; gap: 8px; } }
 .tier-row:last-child { border-bottom: 0; }
 .badge {
   display: inline-block; padding: 5px 13px; border-radius: 100px;
@@ -141,11 +178,11 @@ th {
   text-transform: uppercase; color: rgba(240,238,233,0.3);
   padding: 0 0 12px; border-bottom: 1px solid var(--line);
 }
-td { padding: 11px 0; border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 13px; color: rgba(240,238,233,0.68); font-variant-numeric: tabular-nums; }
+td { padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 13px; color: rgba(240,238,233,0.68); font-variant-numeric: tabular-nums; }
 tr:last-child td { border-bottom: 0; }
 td.right, th.right { text-align: right; }
-.empty { padding: 40px 0; text-align: center; color: rgba(240,238,233,0.3); font-size: 14px; }
-.empty .serif { display: block; font-size: 22px; color: rgba(240,238,233,0.5); margin-bottom: 6px; }
+.empty { padding: 16px 0; text-align: center; color: rgba(240,238,233,0.3); font-size: 14px; }
+.empty .serif { display: block; font-size: 20px; color: rgba(240,238,233,0.5); margin-bottom: 4px; }
 
 
 /* Wordmark, matching joetechninja.com */
@@ -158,7 +195,7 @@ td.right, th.right { text-align: right; }
 .wordmark:hover b { color: var(--paper); }
 .wordmark:hover span { color: var(--clay); }
 
-footer { padding-top: 12px; font-size: 12px; color: rgba(240,238,233,0.22); display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+footer { padding-top: 4px; font-size: 12px; color: rgba(240,238,233,0.22); display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 </style>
 </head>
 <body>
@@ -171,9 +208,9 @@ footer { padding-top: 12px; font-size: 12px; color: rgba(240,238,233,0.22); disp
       <h1>claude&#8209;jev</h1>
     </div>
     <div class="status">
-      <a class="chatlink" href="/chat">Open chat &rarr;</a>
-      <span class="dot" id="dot"></span><span id="status">connecting</span>
+      <a class="chatlink" href="/chat">Open chat <span aria-hidden="true">&rarr;</span></a>
     </div>
+    <div class="conn"><span class="dot" id="dot"></span><span id="status">connecting</span></div>
   </header>
 
   <div class="columns">
@@ -191,7 +228,7 @@ footer { padding-top: 12px; font-size: 12px; color: rgba(240,238,233,0.22); disp
             <p class="detail" id="spendDetail">&mdash;</p>
           </div>
           <div class="card">
-            <p class="eyebrow kicker">Baseline would be</p>
+            <p class="eyebrow kicker">Baseline<span class="hm"> would be</span></p>
             <p class="num value" id="base">$0.00</p>
             <p class="detail" id="baseDetail">&mdash;</p>
           </div>
@@ -199,7 +236,7 @@ footer { padding-top: 12px; font-size: 12px; color: rgba(240,238,233,0.22); disp
       </section>
 
       <section id="capsSection">
-        <div class="section-head"><h2>Usage caps</h2><span class="eyebrow">subscription</span></div>
+        <div class="section-head"><h2>Usage caps</h2><span class="eyebrow">whole subscription</span></div>
         <div class="card panel" id="caps"></div>
       </section>
 
@@ -223,7 +260,7 @@ footer { padding-top: 12px; font-size: 12px; color: rgba(240,238,233,0.22); disp
 
   <footer>
     <a class="wordmark" href="https://joetechninja.com" target="_blank" rel="noopener" aria-label="joetechninja.com"><b>joetechninja</b><span>.com</span></a>
-    <span>Priced against <span id="baselineName">the baseline model</span>. &ldquo;Cached&rdquo; tokens are prefix re-reads, billed at a tenth.</span>
+    <span class="hm">Priced against <span id="baselineName">the baseline model</span>. &ldquo;Cached&rdquo; tokens are prefix re-reads, billed at a tenth.</span>
     <span id="updated"></span>
   </footer>
 </div>
@@ -277,7 +314,7 @@ async function refresh() {
     tokens(month.cacheReadTokens) + " cached";
 
   paintWindows({ Today: today, "7 days": week, "30 days": month });
-  paintCaps(data.usage);
+  paintCaps(data.usage, data.events);
   paintTiers(byTier);
   paintRecent(data.events);
 }
@@ -289,13 +326,24 @@ function paintWindows(buckets) {
     return `<div class="row">
       <span class="label">${esc(name)}</span>
       <span class="track"><span class="fill" style="width:${Math.max(0, Math.min(100, p)).toFixed(1)}%"></span></span>
-      <span class="amt"><b>${money(saved)}</b> saved &middot; ${p.toFixed(0)}% &middot; ${b.requests} req</span>
+      <span class="amt"><b>${money(saved)}</b><span class="x"> saved</span> &middot; ${p.toFixed(0)}%<span class="x"> &middot; ${b.requests} req</span></span>
     </div>`;
   }).join("");
 }
 
-function paintCaps(usage) {
-  const rows = [["5-hour", usage?.fiveHour], ["Weekly", usage?.sevenDay]]
+// A capped window is the whole subscription's, not claude-jev's: the unified
+// rate-limit figure covers every client on the account. What claude-jev did
+// inside the same window comes from the ledger, so the two read side by side.
+const CAP_WINDOWS = [["5-hour", "fiveHour", 5 * 3600], ["Weekly", "sevenDay", 7 * 86400]];
+const STALE_AFTER_MS = 15 * 60 * 1000;
+const ago = (ms) => {
+  const m = Math.round(ms / 60000);
+  return m < 1 ? "just now" : m < 60 ? m + "m ago" : Math.round(m / 60) + "h ago";
+};
+
+function paintCaps(usage, events) {
+  const now = Date.now();
+  const rows = CAP_WINDOWS.map(([name, key, secs]) => [name, usage?.[key], secs])
     .filter(([, v]) => v && v.utilization != null);
   if (!rows.length) {
     // Do not hide the section: a missing gauge with no explanation reads as a
@@ -307,16 +355,25 @@ function paintCaps(usage) {
       `an API key has no unified caps. Chat counts too.</p>`;
     return;
   }
-  $("caps").innerHTML = rows.map(([name, v]) => {
+  const age = usage.lastUpdated ? now - usage.lastUpdated : null;
+  const stale = age == null || age > STALE_AFTER_MS;
+  $("caps").innerHTML = rows.map(([name, v, secs]) => {
     const p = Math.max(0, Math.min(100, v.utilization * 100));
     const cls = p >= 85 ? "hot" : p >= 60 ? "" : "sage";
     const reset = v.resetAt ? "resets " + new Date(v.resetAt * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
+    // The window opened one length before it resets; with no reset time, trail back from now.
+    const start = (v.resetAt ? v.resetAt * 1000 : now) - secs * 1000;
+    const mine = (events || []).filter((e) => new Date(e.ts).getTime() >= start);
+    const cost = mine.reduce((s, e) => s + (e.cost || 0), 0);
     return `<div class="row">
       <span class="label">${esc(name)}</span>
       <span class="track"><span class="fill ${cls}" style="width:${p.toFixed(1)}%"></span></span>
-      <span class="amt">${p.toFixed(0)}%${reset ? " &middot; " + esc(reset) : ""}</span>
+      <span class="amt">${p.toFixed(0)}%</span>
+      <span class="sub">${reset ? esc(reset) + " &middot; " : ""}via claude-jev: ${mine.length} req &middot; ${money(cost)}</span>
     </div>`;
-  }).join("");
+  }).join("") +
+    `<p class="note${stale ? " warn" : ""}">Percent is the whole subscription, as of the last response claude-jev saw` +
+    `${age == null ? "" : " (" + ago(age) + ")"}. It does not move while idle.</p>`;
 }
 
 function paintTiers(byTier) {
@@ -326,7 +383,7 @@ function paintTiers(byTier) {
     const saved = b.baselineCost - b.cost;
     return `<div class="tier-row">
       <span><span class="badge ${tierClass(t)}">${esc(t)}</span></span>
-      <span class="meta">${b.requests} request${b.requests === 1 ? "" : "s"} &middot; ${tokens(b.newInputTokens + b.outputTokens)} new &middot; ${tokens(b.cacheReadTokens)} cached</span>
+      <span class="meta hm">${b.requests} request${b.requests === 1 ? "" : "s"} &middot; ${tokens(b.newInputTokens + b.outputTokens)} new &middot; ${tokens(b.cacheReadTokens)} cached</span>
       <span class="money"><b>${money(saved)}</b>actual ${money(b.cost)}</span>
     </div>`;
   });
@@ -341,8 +398,8 @@ function paintRecent(events) {
     return;
   }
   $("recent").innerHTML = `<table><thead><tr>
-      <th>When</th><th>Tier</th><th class="right">New</th><th class="right">Cached</th>
-      <th class="right">Actual</th><th class="right">Saved</th>
+      <th>When</th><th>Tier</th><th class="right hm">New</th><th class="right hm">Cached</th>
+      <th class="right hm">Actual</th><th class="right">Saved</th>
     </tr></thead><tbody>` +
     rows.map((e) => {
       const saved = (e.baselineCost || 0) - (e.cost || 0);
@@ -353,9 +410,9 @@ function paintRecent(events) {
       return `<tr>
         <td>${new Date(e.ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</td>
         <td><span class="badge ${tierClass(e.tier)}">${esc(e.tier || "?")}</span></td>
-        <td class="right">${tokens(fresh + (e.outputTokens || 0))}</td>
-        <td class="right" style="color:rgba(240,238,233,.3)">${e.cacheReadTokens ? tokens(e.cacheReadTokens) : "&mdash;"}</td>
-        <td class="right">${money(e.cost)}</td>
+        <td class="right hm">${tokens(fresh + (e.outputTokens || 0))}</td>
+        <td class="right hm" style="color:rgba(240,238,233,.3)">${e.cacheReadTokens ? tokens(e.cacheReadTokens) : "&mdash;"}</td>
+        <td class="right hm">${money(e.cost)}</td>
         <td class="right" style="color:var(--clay)">${money(saved)}</td>
       </tr>`;
     }).join("") + "</tbody></table>";

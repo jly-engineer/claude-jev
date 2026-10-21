@@ -45,31 +45,37 @@ a:hover { color: var(--paper); }
 header {
   /* Above main (z-index 2), or the chats drawer opens underneath the log. */
   position: relative; z-index: 3; flex: 0 0 auto;
-  display: flex; align-items: center; justify-content: space-between; gap: 24px;
-  padding: 22px clamp(20px, 5vw, 56px); border-bottom: 1px solid var(--line);
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 14px;
+  /* The bar's edge is the chat column's edge, so nothing floats off from the body. */
+  --hpad: max(clamp(20px, 5vw, 56px), calc((100vw - 860px) / 2 + clamp(20px, 5vw, 32px)));
+  padding: 26px var(--hpad) 14px; border-bottom: 1px solid var(--line);
 }
-/* Only the title shifts: it is nudged right so "Chat" starts on the same left
-   edge as the replies, while the wordmark, the links and New chat keep the
-   bar's own padding. max() so it never goes negative on a narrow window, where
-   the log's column is already the full width. */
-.brand {
-  display: flex; align-items: flex-end; gap: 16px; min-width: 0;
-  margin-left: max(0px, calc((100vw - 860px) / 2 + clamp(20px, 5vw, 32px) - clamp(20px, 5vw, 56px)));
-}
-.brand .wordmark { padding-bottom: 3px; }
+.brand { display: flex; align-items: flex-end; gap: 16px; min-width: 0; }
+/* Header matches the dashboard's: same title, tag and pill button. The wordmark
+   lives in the dashboard footer, so it is dropped here rather than crowd the bar. */
+.brand .wordmark { display: none; }
 .brand h1 {
   font-family: Newsreader, serif; font-weight: 700; color: #fff;
-  font-size: 28px; line-height: 1; letter-spacing: -0.035em;
+  font-size: clamp(30px, 4vw, 44px); line-height: 0.95; letter-spacing: -0.045em;
 }
-.brand .hand { font-size: 17px; display: block; margin-bottom: 2px; }
-.meta { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-left: auto; }
+.brand .hand { font-size: 19px; display: block; margin-bottom: 0; }
+/* Utility row, same slot and style as the dashboard's "live | Log out". */
+.meta { position: absolute; top: 6px; right: var(--hpad); display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.meta .logout {
+  background: none; border: 0; cursor: pointer; font: inherit; letter-spacing: 0.04em;
+  line-height: inherit; color: rgba(240,238,233,0.55); padding: 4px 0;
+}
+.meta .logout:hover { color: var(--paper); }
+/* Round icon buttons: back to the dashboard, and the saved-chats drawer. */
+.iconbtn {
+  display: inline-grid; place-items: center; flex: 0 0 auto; width: 40px; height: 40px;
+  border: 1px solid var(--line); border-radius: 50%; background: rgba(255,255,255,0.03);
+  color: rgba(240,238,233,0.7); cursor: pointer; transition: color 0.15s ease, border-color 0.15s ease;
+}
+.iconbtn svg { width: 18px; height: 18px; }
+.iconbtn:hover, .iconbtn[aria-expanded="true"] { color: var(--clay); border-color: rgba(212,163,115,0.4); }
+.brand .back { align-self: flex-end; margin-bottom: 2px; }
 .actions { display: flex; align-items: center; gap: 10px; }
-.menubtn { display: none; }
-.backlink {
-  font-size: 11px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase;
-}
-.backlink { color: rgba(140,163,145,0.8); border-bottom: 1px solid rgba(140,163,145,0.3); padding-bottom: 3px; }
-.backlink:hover { color: var(--paper); border-bottom-color: var(--clay); }
 
 /* ── Log ── */
 main { position: relative; z-index: 2; flex: 1 1 auto; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.12) transparent; }
@@ -142,8 +148,19 @@ footer { position: relative; z-index: 2; flex: 0 0 auto; border-top: 1px solid v
 .field:focus-within { border-color: rgba(212,163,115,0.4); }
 textarea {
   flex: 1; background: none; border: 0; resize: none; color: var(--paper);
-  font-family: inherit; font-size: 15px; line-height: 1.6; max-height: 220px; padding: 12px 0;
+  font-family: inherit; font-size: 15px; line-height: 1.6; max-height: var(--ta-max, 220px); padding: 12px 30px 12px 0;
 }
+/* Expanded: a tall box that still grows with the text, so a long draft stays in view. */
+.field { position: relative; }
+.field.expanded { --ta-max: 60dvh; }
+.field.expanded textarea { min-height: 32dvh; }
+.expand {
+  position: absolute; top: 8px; right: 10px; width: 26px; height: 26px; padding: 0;
+  display: grid; place-items: center; cursor: pointer;
+  background: none; border: 0; border-radius: 8px; color: rgba(240,238,233,0.4);
+}
+.expand:hover, .field.expanded .expand { color: var(--clay); }
+.expand svg { width: 15px; height: 15px; }
 textarea:focus { outline: none; }
 textarea::placeholder { color: rgba(240,238,233,0.25); }
 .send {
@@ -157,7 +174,8 @@ textarea::placeholder { color: rgba(240,238,233,0.25); }
 .send:active:not(:disabled) { transform: scale(0.97); }
 .send:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
 /* Send's look, sized for the header. An <a>, so it needs its own hover. */
-.send.newchat { padding: 11px 22px; box-shadow: 0 15px 30px -12px rgba(0,0,0,0.55); }
+/* Same pill as the dashboard's Open chat button. */
+.send.newchat { padding: 14px 30px; font-size: 16px; letter-spacing: 0.02em; text-transform: none; box-shadow: none; }
 .send.newchat:hover { background: #fff; color: var(--ink); transform: scale(1.03); }
 .send.newchat:active { transform: scale(0.97); }
 .send.newchat.busy { opacity: 0.35; cursor: not-allowed; transform: none; }
@@ -194,7 +212,7 @@ textarea::placeholder { color: rgba(240,238,233,0.25); }
 
 /* ── Saved chats ── */
 .drawer {
-  position: absolute; top: calc(100% + 8px); right: clamp(20px, 5vw, 56px); z-index: 6;
+  position: absolute; top: calc(100% + 8px); right: var(--hpad); z-index: 6;
   width: min(380px, calc(100vw - 40px)); max-height: 60vh; overflow-y: auto;
   background: var(--surface); border: 1px solid rgba(212,163,115,0.25); border-radius: 22px;
   box-shadow: 0 40px 70px -30px rgba(0,0,0,0.85);
@@ -244,43 +262,16 @@ textarea::placeholder { color: rgba(240,238,233,0.25); }
 /* ── Phones and narrow windows ── */
 @media (max-width: 640px) {
   header {
-    padding: max(10px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left));
+    --hpad: 12px;
+    padding: max(26px, env(safe-area-inset-top)) var(--hpad) 14px;
     gap: 12px;
   }
-  .brand { margin-left: 0; }
-  .brand .hand { display: none; }
-  .brand h1 { font-size: 22px; }
 
-  /* Secondary links fold into a menu under the ☰ button. */
-  .menubtn {
-    display: inline-grid; place-items: center; width: 44px; height: 44px; padding: 0;
-    border: 1px solid var(--line); border-radius: 50%; background: rgba(255,255,255,0.03); cursor: pointer;
-  }
-  .menubtn span, .menubtn span::before, .menubtn span::after {
-    display: block; width: 18px; height: 2px; border-radius: 2px; background: var(--paper); position: relative;
-    transition: transform 0.15s ease, background 0.15s ease;
-  }
-  .menubtn span::before, .menubtn span::after { content: ""; position: absolute; left: 0; }
-  .menubtn span::before { top: -6px; }
-  .menubtn span::after { top: 6px; }
-  header.menu-open .menubtn span { background: transparent; }
-  header.menu-open .menubtn span::before { transform: translateY(6px) rotate(45deg); }
-  header.menu-open .menubtn span::after { transform: translateY(-6px) rotate(-45deg); }
-
-  .meta {
-    display: none; position: absolute; top: calc(100% + 6px); right: max(14px, env(safe-area-inset-right)); z-index: 7;
-    min-width: 220px; flex-direction: column; align-items: stretch; gap: 0; padding: 6px 0;
-    background: var(--surface); border: 1px solid rgba(212,163,115,0.25); border-radius: 18px;
-    box-shadow: 0 40px 70px -30px rgba(0,0,0,0.85);
-  }
-  header.menu-open .meta { display: flex; }
-  .meta > * { padding: 13px 20px; margin: 0; }
-  .meta .backlink, .meta button.backlink { border-bottom: 0 !important; font-size: 12px; text-align: left; width: 100%; }
-  /* The server build injects Log out as a form; match the links' metrics. */
-  .meta form { display: block !important; }
-  .meta form button { display: block !important; padding: 0 !important; font-size: 12px !important; line-height: 1.5 !important; }
-
-  .send.newchat { padding: 11px 16px; font-size: 9.5px; letter-spacing: 0.2em; min-height: 44px; }
+  .send.newchat { padding: 9px 18px; font-size: 14px; min-height: 0; }
+  .iconbtn { width: 36px; height: 36px; }
+  .iconbtn svg { width: 16px; height: 16px; }
+  .brand { gap: 10px; }
+  .actions { gap: 8px; }
 
   .drawer { left: 10px; right: 10px; width: auto; max-height: 70dvh; }
   .chat-row { padding: 14px 12px 14px 16px; }
@@ -297,7 +288,10 @@ textarea::placeholder { color: rgba(240,238,233,0.25); }
   .composer { padding: 10px max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left)); gap: 8px; }
   .field { padding: 2px 16px; border-radius: 22px; }
   /* 16px or iOS zooms the page when the field is focused. */
-  textarea { font-size: 16px; padding: 10px 0; max-height: 30dvh; }
+  textarea { font-size: 16px; padding: 10px 30px 10px 0; max-height: var(--ta-max, 30dvh); }
+  .field.expanded { --ta-max: 55dvh; }
+  .field.expanded textarea { min-height: 28dvh; }
+  .expand { width: 34px; height: 34px; top: 4px; right: 6px; }
   #send { padding: 0 18px; min-height: 44px; }
   .menu { left: 12px; right: 12px; }
 
@@ -315,19 +309,21 @@ textarea::placeholder { color: rgba(240,238,233,0.25); }
 
 <header>
   <div class="brand">
+    <a class="iconbtn back" href="/" id="back" aria-label="Back to dashboard" title="Dashboard">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4.5 6.5 10l5.5 5.5"/></svg>
+    </a>
     <div>
       <span class="hand">talk to it</span>
       <h1>Chat</h1>
     </div>
     <a class="wordmark" href="https://joetechninja.com" target="_blank" rel="noopener" aria-label="joetechninja.com"><b>joetechninja</b><span>.com</span></a>
   </div>
-  <div class="meta" id="meta">
-    <a class="backlink" href="/" id="back">Dashboard</a>
-    <a class="backlink" href="#" id="chats" aria-expanded="false" aria-controls="drawer">History</a>
-  </div>
+  <div class="meta" id="meta"></div>
   <div class="actions">
+    <a class="iconbtn" href="#" id="chats" role="button" aria-label="Chat history" title="History" aria-expanded="false" aria-controls="drawer">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.25"/><path d="M10 5.75V10l2.75 1.75"/></svg>
+    </a>
     <a class="send newchat" href="#" id="newChat">New chat</a>
-    <button class="menubtn" id="menuBtn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="meta"><span></span></button>
   </div>
   <div class="drawer" id="drawer" hidden></div>
 </header>
@@ -348,6 +344,9 @@ textarea::placeholder { color: rgba(240,238,233,0.25); }
       <div class="field">
         <div class="attachments" id="attachments" hidden></div>
         <textarea id="input" rows="1" placeholder="Ask something, or paste an image&hellip;"></textarea>
+        <button type="button" class="expand" id="expand" aria-label="Expand message box" aria-pressed="false" title="Expand message box">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2h4v4M6 14H2v-4M14 2l-5 5M2 14l5-5"/></svg>
+        </button>
       </div>
       <button class="send" id="send">Send</button>
     </div>
@@ -550,6 +549,9 @@ async function send() {
   if (pending.some((i) => !i.path && !i.error)) return;    // an upload is still in flight
   $("input").value = "";
   $("input").style.height = "auto";
+  // A sent message has done its job: go back to the compact box.
+  document.querySelector(".field").classList.remove("expanded");
+  $("expand").setAttribute("aria-pressed", "false");
   bubble("user", text || "(image)", null, pending.filter((i) => i.path).map((i) => i.preview));
   pending.length = 0;
   renderAttachments();
@@ -661,10 +663,21 @@ $("input").addEventListener("keydown", (e) => {
   }
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
 });
-$("input").addEventListener("input", (e) => {
-  e.target.style.height = "auto";
-  e.target.style.height = Math.min(220, e.target.scrollHeight) + "px";
-});
+// CSS max-height clamps this, so one rule serves both the compact and expanded box.
+const fitInput = () => {
+  const t = $("input");
+  t.style.height = "auto";
+  t.style.height = t.scrollHeight + "px";
+};
+$("input").addEventListener("input", fitInput);
+function setExpanded(on) {
+  document.querySelector(".field").classList.toggle("expanded", on);
+  $("expand").setAttribute("aria-pressed", String(on));
+  $("expand").title = $("expand").ariaLabel = on ? "Collapse message box" : "Expand message box";
+  fitInput();
+  $("input").focus();
+}
+$("expand").addEventListener("click", () => setExpanded(!document.querySelector(".field").classList.contains("expanded")));
 // Switching mid-reply would pour the rest of it into the wrong chat.
 $("newChat").addEventListener("click", (e) => {
   e.preventDefault();
@@ -864,21 +877,6 @@ $("input").addEventListener("input", renderMenu);
 $("input").addEventListener("click", renderMenu);
 $("input").addEventListener("blur", () => setTimeout(closeMenu, 120));
 
-// ── Narrow screens ─────────────────────────────────────────────────────────
-function setMenu(open) {
-  document.querySelector("header").classList.toggle("menu-open", open);
-  $("menuBtn").setAttribute("aria-expanded", String(open));
-}
-$("menuBtn").addEventListener("click", (e) => {
-  e.stopPropagation();
-  setMenu(!document.querySelector("header").classList.contains("menu-open"));
-});
-// Choosing anything in the menu closes it; History then opens its own list.
-$("meta").addEventListener("click", () => setMenu(false));
-document.addEventListener("click", (e) => {
-  if (!e.target.closest("#meta, #menuBtn")) setMenu(false);
-});
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") setMenu(false); });
 
 const narrow = matchMedia("(max-width: 640px)");
 const fitPlaceholder = () => { $("input").placeholder = narrow.matches ? "Message…" : "Ask something, or paste an image…"; };
